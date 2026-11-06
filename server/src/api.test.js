@@ -151,6 +151,18 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
     assert.equal(query.sources.length, 1);
     assert.match(query.sources[0].excerpt, /deadline is Friday/i);
 
+    assert.equal(query.sources[0].documentId, uploadedA.documents[0].id);
+    assert.ok(query.sources[0].chunkId);
+    const focusedEvidenceResponse = await fetch(`${baseUrl}/api/documents/${uploadedA.documents[0].id}/evidence?limit=5&chunkId=${query.sources[0].chunkId}`);
+    assert.equal(focusedEvidenceResponse.status, 200);
+    const focusedEvidence = await focusedEvidenceResponse.json();
+    assert.equal(focusedEvidence.focusedChunkId, query.sources[0].chunkId);
+    assert.ok(focusedEvidence.evidence.some((item) => item.id === query.sources[0].chunkId));
+
+    const wrongDocumentPassage = await fetch(`${baseUrl}/api/documents/${uploadedB.documents[0].id}/evidence?chunkId=${query.sources[0].chunkId}`);
+    assert.equal(wrongDocumentPassage.status, 404);
+
+
     const reportCreateResponse = await fetch(`${baseUrl}/api/reports`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
