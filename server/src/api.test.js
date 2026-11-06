@@ -233,6 +233,17 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
     assert.equal(scopedReport.sourceCount, 1);
     assert.equal(scopedReport.scope, 'support-brief.txt');
 
+    const backupResponse = await fetch(`${baseUrl}/api/workspace/export`);
+    assert.equal(backupResponse.status, 200);
+    assert.match(backupResponse.headers.get('content-type'), /application\/json/);
+    assert.match(backupResponse.headers.get('content-disposition'), /proofstack-workspace-backup\.json/);
+    const backup = await backupResponse.json();
+    assert.equal(backup.format, 'proofstack-workspace');
+    assert.equal(backup.version, 1);
+    assert.equal(backup.documents.length, 2);
+    assert.ok(backup.chunks.length > 0);
+    assert.equal(backup.reports.length, 2);
+
     const afterUpload = await fetch(`${baseUrl}/api/overview`).then((response) => response.json());
     assert.equal(afterUpload.documents, 2);
     assert.ok(afterUpload.evidenceUnits > 0);
@@ -256,17 +267,6 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
     assert.deepEqual([reportDelete.status, scopedReportDelete.status], [200, 200]);
     assert.equal((await fetch(`${baseUrl}/api/reports`).then((response) => response.json())).length, 0);
     assert.equal((await fetch(`${baseUrl}/api/reports/${savedReport.id}`)).status, 404);
-
-    const backupResponse = await fetch(`${baseUrl}/api/workspace/export`);
-    assert.equal(backupResponse.status, 200);
-    assert.match(backupResponse.headers.get('content-type'), /application\/json/);
-    assert.match(backupResponse.headers.get('content-disposition'), /proofstack-workspace-backup\.json/);
-    const backup = await backupResponse.json();
-    assert.equal(backup.format, 'proofstack-workspace');
-    assert.equal(backup.version, 1);
-    assert.equal(backup.documents.length, 2);
-    assert.ok(backup.chunks.length > 0);
-    assert.equal(backup.reports.length, 2);
 
     const afterDelete = await fetch(`${baseUrl}/api/overview`).then((response) => response.json());
     assert.equal(afterDelete.documents, 0);
