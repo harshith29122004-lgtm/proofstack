@@ -32,7 +32,7 @@ export function splitChunks(text, source, max = 900) {
   const chunks = []; let current = '', part = 1;
   function make(content, number) {
     return { id: randomUUID(), documentId: source.documentId, documentName: source.name,
-      location: source.locationPrefix ? (source.locationPrefix.toLowerCase().includes('row') ? source.locationPrefix + ' ' + number : source.locationPrefix) : 'Section ' + number, content };
+      location: source.locationPrefix ? (source.locationPrefix.toLowerCase() === 'section' ? source.locationPrefix + ' ' + number : source.locationPrefix) : 'Section ' + number, content };
   }
   function pushLarge(paragraph) {
     const characters = Array.from(paragraph);

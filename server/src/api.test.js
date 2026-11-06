@@ -151,6 +151,118 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
     assert.equal(query.sources.length, 1);
     assert.match(query.sources[0].excerpt, /deadline is Friday/i);
 
+    assert.equal(query.sources[0].documentId, uploadedA.documents[0].id);
+    assert.ok(query.sources[0].chunkId);
+    assert.equal(query.coverage, 100);
+
+    const partialCoverageResponse = await fetch(`${baseUrl}/api/query`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'launch deadline Friday absentword' }),
+    });
+    assert.equal(partialCoverageResponse.status, 200);
+    const partialCoverage = await partialCoverageResponse.json();
+    assert.equal(partialCoverage.coverage, 75, 'coverage counts only distinct query terms present in retrieved passages');
+
+    const noCoverageResponse = await fetch(`${baseUrl}/api/query`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'unrelatedterm missingphrase' }),
+    });
+    assert.equal(noCoverageResponse.status, 200);
+    assert.equal((await noCoverageResponse.json()).coverage, 0);
+
+    const focusedEvidenceResponse = await fetch(`${baseUrl}/api/documents/${uploadedA.documents[0].id}/evidence?limit=5&chunkId=${query.sources[0].chunkId}`);
+    assert.equal(focusedEvidenceResponse.status, 200);
+    const focusedEvidence = await focusedEvidenceResponse.json();
+    assert.equal(focusedEvidence.focusedChunkId, query.sources[0].chunkId);
+    assert.ok(focusedEvidence.evidence.some((item) => item.id === query.sources[0].chunkId));
+
+    const wrongDocumentPassage = await fetch(`${baseUrl}/api/documents/${uploadedB.documents[0].id}/evidence?chunkId=${query.sources[0].chunkId}`);
+    assert.equal(wrongDocumentPassage.status, 404);
+
+
+    const reportCreateResponse = await fetch(`${baseUrl}/api/reports`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'launch deadline Friday' }),
+    });
+    assert.equal(reportCreateResponse.status, 201);
+    const savedReport = await reportCreateResponse.json();
+    assert.equal(savedReport.sourceCount, 1);
+    assert.ok(savedReport.id);
+
+    const reportList = await fetch(`${baseUrl}/api/reports`).then((response) => response.json());
+    assert.equal(reportList.length, 1);
+    assert.equal(reportList[0].id, savedReport.id);
+
+    const reportDetail = await fetch(`${baseUrl}/api/reports/${savedReport.id}`).then((response) => response.json());
+    assert.equal(reportDetail.sources.length, 1);
+    assert.match(reportDetail.sources[0].excerpt, /deadline is Friday/i);
+
+    const reportExportResponse = await fetch(`${baseUrl}/api/reports/${savedReport.id}/export`);
+    assert.equal(reportExportResponse.status, 200);
+    assert.match(reportExportResponse.headers.get('content-type'), /text\/markdown/);
+    assert.match(reportExportResponse.headers.get('content-disposition'), /attachment; filename=/);
+    const reportMarkdown = await reportExportResponse.text();
+    assert.match(reportMarkdown, /Research question/);
+    assert.match(reportMarkdown, /project-brief\.txt/);
+    assert.match(reportMarkdown, /deadline is Friday/i);
+    assert.match(reportMarkdown, /Verification note/);
+
+    const invalidReport = await fetch(`${baseUrl}/api/reports`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'abc' }),
+    });
+    assert.equal(invalidReport.status, 400);
+
+    const scopedToFirstDocument = await fetch(`${baseUrl}/api/query`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'service window Monday', documentId: uploadedA.documents[0].id }),
+    }).then((response) => response.json());
+    assert.equal(scopedToFirstDocument.scope.documentId, uploadedA.documents[0].id);
+    assert.equal(scopedToFirstDocument.sources.length, 0);
+
+    const scopedToSecondDocumentResponse = await fetch(`${baseUrl}/api/query`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'service window Monday', documentId: uploadedB.documents[0].id }),
+    });
+    assert.equal(scopedToSecondDocumentResponse.status, 200);
+    const scopedToSecondDocument = await scopedToSecondDocumentResponse.json();
+    assert.equal(scopedToSecondDocument.scope.documentName, 'support-brief.txt');
+    assert.equal(scopedToSecondDocument.sources.length, 1);
+
+    const unknownScope = await fetch(`${baseUrl}/api/query`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'service window Monday', documentId: 'missing-document' }),
+    });
+    assert.equal(unknownScope.status, 404);
+
+    const scopedReportResponse = await fetch(`${baseUrl}/api/reports`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'service window Monday', documentId: uploadedB.documents[0].id }),
+    });
+    assert.equal(scopedReportResponse.status, 201);
+    const scopedReport = await scopedReportResponse.json();
+    assert.equal(scopedReport.sourceCount, 1);
+    assert.equal(scopedReport.scope, 'support-brief.txt');
+
+    const backupResponse = await fetch(`${baseUrl}/api/workspace/export`);
+    assert.equal(backupResponse.status, 200);
+    assert.match(backupResponse.headers.get('content-type'), /application\/json/);
+    assert.match(backupResponse.headers.get('content-disposition'), /proofstack-workspace-backup\.json/);
+    const backup = await backupResponse.json();
+    assert.equal(backup.format, 'proofstack-workspace');
+    assert.equal(backup.version, 1);
+    assert.equal(backup.documents.length, 2);
+    assert.ok(backup.chunks.length > 0);
+    assert.equal(backup.reports.length, 2);
+
     const afterUpload = await fetch(`${baseUrl}/api/overview`).then((response) => response.json());
     assert.equal(afterUpload.documents, 2);
     assert.ok(afterUpload.evidenceUnits > 0);
@@ -160,9 +272,85 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
       fetch(`${baseUrl}/api/documents/${uploadedB.documents[0].id}`, { method: 'DELETE' }),
     ]);
     assert.deepEqual(deleteResponses.map((response) => response.status), [200, 200]);
+    const reportAfterDocumentDelete = await fetch(`${baseUrl}/api/reports/${savedReport.id}`);
+    assert.equal(reportAfterDocumentDelete.status, 200, 'saved report retains its evidence snapshot after source deletion');
+
+    const scopedReportAfterDocumentDelete = await fetch(`${baseUrl}/api/reports/${scopedReport.id}`).then((response) => response.json());
+    assert.equal(scopedReportAfterDocumentDelete.scope.documentName, 'support-brief.txt');
+    assert.equal(scopedReportAfterDocumentDelete.sources.length, 1);
+
+    const [reportDelete, scopedReportDelete] = await Promise.all([
+      fetch(`${baseUrl}/api/reports/${savedReport.id}`, { method: 'DELETE' }),
+      fetch(`${baseUrl}/api/reports/${scopedReport.id}`, { method: 'DELETE' }),
+    ]);
+    assert.deepEqual([reportDelete.status, scopedReportDelete.status], [200, 200]);
+    assert.equal((await fetch(`${baseUrl}/api/reports`).then((response) => response.json())).length, 0);
+    assert.equal((await fetch(`${baseUrl}/api/reports/${savedReport.id}`)).status, 404);
+
     const afterDelete = await fetch(`${baseUrl}/api/overview`).then((response) => response.json());
     assert.equal(afterDelete.documents, 0);
     assert.equal(afterDelete.evidenceUnits, 0);
+
+    const invalidBackupForm = new FormData();
+    invalidBackupForm.append('file', new Blob(['not json']), 'broken.json');
+    const invalidBackupResponse = await fetch(`${baseUrl}/api/workspace/import`, { method: 'POST', body: invalidBackupForm });
+    assert.equal(invalidBackupResponse.status, 422);
+    assert.equal((await fetch(`${baseUrl}/api/overview`).then((response) => response.json())).documents, 0);
+
+    const invalidStructure = {
+      ...backup,
+      chunks: [{ ...backup.chunks[0], documentId: 'missing-document' }],
+    };
+    const invalidStructureForm = new FormData();
+    invalidStructureForm.append('file', new Blob([JSON.stringify(invalidStructure)], { type: 'application/json' }), 'invalid-structure.json');
+    const invalidStructureResponse = await fetch(`${baseUrl}/api/workspace/import`, { method: 'POST', body: invalidStructureForm });
+    assert.equal(invalidStructureResponse.status, 422);
+    assert.equal((await fetch(`${baseUrl}/api/overview`).then((response) => response.json())).documents, 0);
+
+    const duplicateReportIds = {
+      ...backup,
+      reports: [backup.reports[0], { ...backup.reports[1], id: backup.reports[0].id }],
+    };
+    const duplicateReportForm = new FormData();
+    duplicateReportForm.append('file', new Blob([JSON.stringify(duplicateReportIds)], { type: 'application/json' }), 'duplicate-reports.json');
+    const duplicateReportResponse = await fetch(`${baseUrl}/api/workspace/import`, { method: 'POST', body: duplicateReportForm });
+    assert.equal(duplicateReportResponse.status, 422);
+    assert.match((await duplicateReportResponse.json()).error, /invalid saved report/i);
+
+    const invalidReportScope = {
+      ...backup,
+      reports: backup.reports.map((report, index) => index === 0
+        ? { ...report, scope: { documentId: 42, documentName: null } }
+        : report),
+    };
+    const invalidReportScopeForm = new FormData();
+    invalidReportScopeForm.append('file', new Blob([JSON.stringify(invalidReportScope)], { type: 'application/json' }), 'invalid-report-scope.json');
+    const invalidReportScopeResponse = await fetch(`${baseUrl}/api/workspace/import`, { method: 'POST', body: invalidReportScopeForm });
+    assert.equal(invalidReportScopeResponse.status, 422);
+    assert.match((await invalidReportScopeResponse.json()).error, /invalid saved report/i);
+
+    const invalidReportCitation = {
+      ...backup,
+      reports: backup.reports.map((report, index) => index === 0
+        ? { ...report, sources: report.sources.map((source, sourceIndex) => sourceIndex === 0 ? { ...source, relevance: 101 } : source) }
+        : report),
+    };
+    const invalidReportCitationForm = new FormData();
+    invalidReportCitationForm.append('file', new Blob([JSON.stringify(invalidReportCitation)], { type: 'application/json' }), 'invalid-report-citation.json');
+    const invalidReportCitationResponse = await fetch(`${baseUrl}/api/workspace/import`, { method: 'POST', body: invalidReportCitationForm });
+    assert.equal(invalidReportCitationResponse.status, 422);
+    assert.match((await invalidReportCitationResponse.json()).error, /invalid report citation/i);
+
+    const restoreForm = new FormData();
+    restoreForm.append('file', new Blob([JSON.stringify(backup)], { type: 'application/json' }), 'proofstack-workspace-backup.json');
+    const restoreResponse = await fetch(`${baseUrl}/api/workspace/import`, { method: 'POST', body: restoreForm });
+    assert.equal(restoreResponse.status, 200);
+    const restored = await restoreResponse.json();
+    assert.equal(restored.documents, 2);
+    assert.equal(restored.evidenceUnits, backup.chunks.length);
+    assert.equal(restored.reports, 2);
+    assert.equal((await fetch(`${baseUrl}/api/reports`).then((response) => response.json())).length, 2);
+
   } catch (error) {
     if (stderr) error.message += `\nAPI stderr: ${stderr}`;
     throw error;

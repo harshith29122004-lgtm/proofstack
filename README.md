@@ -11,13 +11,32 @@ ProofStack ingests common office documents, indexes their text into evidence chu
 - Upload up to 5 files per request, 10 MB per file.
 - Extract text from PDF, DOCX, XLSX, XLS, CSV, TXT, Markdown, JSON and LOG files.
 - Split extracted text into evidence chunks while retaining document and page/sheet/row/section locators where available.
-- Retrieve ranked lexical matches with source excerpts and relevance signals.
+- Retrieve ranked lexical matches with source excerpts and relevance signals, either across the workspace or scoped to a single source.
 - Keep an on-disk local workspace with serialized writes and document removal.
-- Provide a React + TypeScript interface for browsing the workspace and querying evidence.
+- Provide a React + TypeScript interface for querying evidence and managing a searchable source library.
+- Inspect indexed passages for each source, including page, sheet, row or section locators, with paginated loading.
+- Open a search citation directly in the source inspector, centered on and highlighting the exact retrieved passage.
+- Save evidence-query snapshots in the local workspace—including the selected source scope—and export cited passages, source locations, relevance signals and verification notes as Markdown.
+- Browse and delete saved reports; report snapshots remain available if the original source document is later removed.
+- Export the complete local workspace—including sources, extracted evidence and saved reports—to a versioned JSON backup, then restore it with validation.
 
-ProofStack does **not** currently provide semantic/vector search, generated answers, claim-entailment verification, contradiction detection, OCR, authentication, multi-user access, or encrypted-at-rest storage. A relevance score is a ranking signal, not a truth or confidence score.
+Original uploaded file bytes are processed in memory and are not retained; ProofStack persists document metadata, extracted text, evidence chunks and saved reports in the local workspace.
+
+ProofStack does **not** currently provide semantic/vector search, generated answers, claim-entailment verification, contradiction detection, OCR, authentication, multi-user access, or encrypted-at-rest storage. Saved reports are snapshots of extractive retrieval—not independently verified findings. A relevance score is a ranking signal, not a truth or confidence score.
 
 ## Quick start
+
+### Docker Compose (recommended for a local demo)
+
+Requirements: Docker Engine with the Compose plugin.
+
+```bash
+docker compose up --build
+```
+
+Open http://localhost:8080. The web UI is published only on loopback; the API remains internal to the Compose network and is reached through the web proxy. Workspace data persists in the named `proofstack-data` volume. Stop the stack with `docker compose down` (use `docker compose down -v` only if you intentionally want to delete the workspace volume).
+
+### Node.js development
 
 Requirements: Node.js 20 or newer and npm.
 
@@ -33,7 +52,8 @@ Open the Vite URL printed by the client (normally http://localhost:5173). The AP
 Useful root commands:
 
 ```bash
-npm test       # server tests
+npm test       # server API and parser tests
+npm run test:client # React component tests
 npm run build  # client type-check and production build
 npm start      # start the API only
 ```
@@ -52,11 +72,12 @@ For environment variables and host-binding details, see [server configuration](d
 ## Repository layout
 
 ```text
-client/       React, TypeScript and Vite application
-server/       Express API, parsers, workspace persistence and tests
+client/       React, TypeScript, Vite, nginx configuration and Dockerfile
+server/       Express API, parsers, workspace persistence, tests and Dockerfile
 examples/     Synthetic sample documents for local evaluation
 docs/         Developer and API documentation
 .github/      CI, CodeQL, Dependabot and contribution templates
+docker-compose.yml  Local-only web/API deployment with a persistent data volume
 ```
 
 ## Evidence and privacy principles

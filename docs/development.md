@@ -66,6 +66,22 @@ The server creates its local workspace under `server/data/workspace.json`. This 
 
 If startup reports that an existing workspace cannot be read or parsed, stop and preserve the file for recovery. Do not delete it as a first troubleshooting step.
 
+## Tests
+
+Run the backend integration and parser tests:
+
+```bash
+npm test
+```
+
+Run the React component tests:
+
+```bash
+npm run test:client
+```
+
+The client suite uses Vitest, jsdom and React Testing Library. CI runs both test suites before the client production build and Docker smoke test. The server suite also includes direct unit tests for Unicode tokenization, lexical ranking, phrase boosts, chunk boundaries and source-location preservation, alongside API integration and parser tests.
+
 ## Troubleshooting
 
 ### Port already in use
@@ -83,3 +99,26 @@ The current engine is lexical. Try a short query using important terms that appe
 ### Workspace does not start
 
 Preserve `server/data/workspace.json` and inspect the error. The server intentionally refuses to replace an invalid existing workspace with an empty one.
+
+
+## Docker Compose deployment
+
+For a reproducible local stack, install Docker Engine and the Compose plugin, then run from the repository root:
+
+```bash
+docker compose up --build
+```
+
+Open `http://localhost:8080`. Nginx serves the built React application and proxies `/api` requests to the internal Express service. Only the web port is published, and it is bound to `127.0.0.1`; the API port is not exposed on the host. The API runs as the unprivileged Node user and stores workspace data in the named `proofstack-data` volume.
+
+Useful commands:
+
+```bash
+docker compose ps
+docker compose logs -f api web
+docker compose down
+```
+
+The named volume survives `docker compose down`. To intentionally delete it, run `docker compose down -v`; this permanently removes the container-managed workspace data. Export a workspace backup before destructive maintenance.
+
+The Compose deployment is still a local single-user prototype. Loopback binding does not add authentication or make the application suitable for public or multi-user hosting.
