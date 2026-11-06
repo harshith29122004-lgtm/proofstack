@@ -16,11 +16,15 @@ const HOST = process.env.HOST || '127.0.0.1';
 const DATA_DIR = path.resolve('data');
 const DB_FILE = path.join(DATA_DIR, 'workspace.json');
 const MAX_EXTRACTED_CHARACTERS = 5_000_000;
+const MAX_WORKSPACE_BACKUP_BYTES = 50 * 1024 * 1024;
+const MAX_WORKSPACE_DOCUMENTS = 1000;
+const MAX_WORKSPACE_CHUNKS = 100_000;
 const ALLOWED_EXTENSIONS = new Set([
   '.pdf', '.docx', '.xlsx', '.xls', '.csv', '.txt', '.md', '.json', '.log',
 ]);
 
 const storage = multer.memoryStorage();
+const workspaceBackupUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_WORKSPACE_BACKUP_BYTES, files: 1 } });
 const upload = multer({
   storage,
   limits: {
@@ -45,10 +49,10 @@ const upload = multer({
   },
 });
 
-app.use(cors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] }));
+app.use(cors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:8080', 'http://127.0.0.1:8080'] }));
 app.use(express.json({ limit: '1mb' }));
 
-let db = { documents: [], chunks: [] };
+let db = { documents: [], chunks: [], reports: [] };
 let workspaceMutationQueue = Promise.resolve();
 
 await fs.mkdir(DATA_DIR, { recursive: true });
@@ -66,7 +70,7 @@ if (workspaceContents !== undefined) {
   if (!stored || !Array.isArray(stored.documents) || !Array.isArray(stored.chunks)) {
     throw new Error('Workspace data has an invalid structure; refusing to overwrite it.');
   }
-  db = stored;
+  db = { ...stored, reports: Array.isArray(stored.reports) ? stored.reports : [] };
 } else {
   await persist();
 }
@@ -90,7 +94,7 @@ async function persist() {
 function updateWorkspace(update) {
   const operation = workspaceMutationQueue.then(async () => {
     const previous = db;
-    db = update(db);
+    db = { ...db, ...update(db) };
     try {
       await persist();
     } catch (error) {
@@ -150,6 +154,83 @@ async function extract(file) {
     }));
   }
   throw new Error('Unsupported file type.');
+}
+
+function buildQueryResult(question, options = {}) {
+  const scopedDocument = options.documentId
+    ? db.documents.find((document) => document.id === options.documentId)
+    : null;
+  const candidateChunks = options.documentId
+    ? db.chunks.filter((chunk) => chunk.documentId === options.documentId)
+    : db.chunks;
+  const ranked = candidateChunks
+    .map((chunk) => ({ ...chunk, score: score(question, chunk.content) }))
+    .filter((chunk) => chunk.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 6);
+  const sources = ranked.map((chunk, index) => ({
+    citation: '[S' + (index + 1) + ']',
+    chunkId: chunk.id,
+    documentId: chunk.documentId,
+    document: chunk.documentName,
+    location: chunk.location,
+    excerpt: chunk.content.slice(0, 420),
+    relevance: Math.round(Math.min(1, chunk.score / (ranked[0]?.score || 1)) * 100),
+  }));
+  const uniqueQueryTerms = new Set(terms(question));
+  const retrievedTerms = new Set(ranked.flatMap((result) => terms(result.content)));
+  const matchedQueryTerms = [...uniqueQueryTerms].filter((term) => retrievedTerms.has(term)).length;
+  const coverage = uniqueQueryTerms.size
+    ? Math.round(matchedQueryTerms / uniqueQueryTerms.size * 100)
+    : 0;
+  return {
+    question,
+    scope: { documentId: scopedDocument?.id || null, documentName: scopedDocument?.name || 'All sources' },
+    answer: ranked.length
+      ? 'Here are the strongest matching passages from your workspace. This release uses transparent, extractive retrieval rather than generating unsupported claims. Read the cited excerpts before relying on a conclusion.'
+      : 'No matching evidence was found in the current workspace. Add relevant documents or try different wording.',
+    sources,
+    coverage: Math.min(100, coverage),
+    mode: 'extractive',
+    notice: 'A match is not proof that a claim is true. Verify the original source and context.',
+  };
+}
+
+function escapeMarkdown(value) {
+  return String(value ?? '').replace(/[\r\n]+/g, ' ').replaceAll('|', '\\|');
+}
+
+function renderReportMarkdown(report) {
+  const lines = [
+    '# ' + escapeMarkdown(report.title),
+    '',
+    '**Created:** ' + new Date(report.createdAt).toISOString(),
+    '',
+    '## Research question',
+    '',
+    report.question,
+    '',
+    '## Evidence summary',
+    '',
+    report.answer,
+    '',
+    '**Evidence coverage:** ' + report.coverage + '%',
+    '',
+    '## Retrieved sources',
+    '',
+  ];
+  if (!report.sources.length) lines.push('No matching evidence was found for this question.');
+  for (const source of report.sources) {
+    lines.push('### ' + escapeMarkdown(source.citation) + ' ' + escapeMarkdown(source.document));
+    lines.push('');
+    lines.push('- **Location:** ' + escapeMarkdown(source.location));
+    lines.push('- **Retrieval match:** ' + source.relevance + '%');
+    lines.push('');
+    lines.push(...String(source.excerpt).split(/\r?\n/).map((line) => '> ' + escapeMarkdown(line)));
+    lines.push('');
+  }
+  lines.push('## Verification note', '', report.notice, '', '---', '', 'Generated by ProofStack. Retrieval relevance is not a truth score; consult the original source before relying on a conclusion.', '');
+  return lines.join('\n');
 }
 
 app.get('/api/health', (_req, res) => res.json({
@@ -215,6 +296,39 @@ app.post('/api/documents', upload.array('files', 5), async (req, res) => {
   }
 });
 
+app.get('/api/documents/:id/evidence', (req, res) => {
+  const document = db.documents.find((item) => item.id === req.params.id);
+  if (!document) return res.status(404).json({ error: 'Document not found.' });
+  const requestedLimit = Number.parseInt(req.query.limit, 10);
+  const requestedOffset = Number.parseInt(req.query.offset, 10);
+  const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(100, requestedLimit)) : 30;
+  const matching = db.chunks.filter((chunk) => chunk.documentId === document.id);
+  const requestedChunkId = String(req.query.chunkId || '').trim();
+  const targetIndex = requestedChunkId
+    ? matching.findIndex((chunk) => chunk.id === requestedChunkId)
+    : -1;
+  if (requestedChunkId && targetIndex < 0) {
+    return res.status(404).json({ error: 'Evidence passage not found in this document.' });
+  }
+  const offset = targetIndex >= 0
+    ? Math.max(0, targetIndex - Math.floor(limit / 2))
+    : Number.isFinite(requestedOffset) ? Math.max(0, requestedOffset) : 0;
+  const evidence = matching.slice(offset, offset + limit).map((chunk) => ({
+    id: chunk.id,
+    location: chunk.location,
+    excerpt: String(chunk.content || '').slice(0, 800),
+  }));
+  return res.json({
+    document: { id: document.id, name: document.name, type: document.type, size: document.size, createdAt: document.createdAt, chunkCount: document.chunkCount },
+    total: matching.length,
+    offset,
+    limit,
+    hasMore: offset + evidence.length < matching.length,
+    evidence,
+    focusedChunkId: targetIndex >= 0 ? requestedChunkId : null,
+  });
+});
+
 app.delete('/api/documents/:id', async (req, res) => {
   let found = false;
   try {
@@ -236,36 +350,208 @@ app.delete('/api/documents/:id', async (req, res) => {
 
 app.post('/api/query', (req, res) => {
   const question = String(req.body?.question || '').trim();
-  if (question.length < 4) {
-    return res.status(400).json({ error: 'Ask a more specific question (at least 4 characters).' });
+  if (question.length < 4 || question.length > 1000) {
+    return res.status(400).json({ error: 'Ask a more specific question (at least 4 characters and no more than 1,000).' });
   }
-  const ranked = db.chunks
-    .map((chunk) => ({ ...chunk, score: score(question, chunk.content) }))
-    .filter((chunk) => chunk.score > 0)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 6);
-  const sources = ranked.map((chunk, index) => ({
-    citation: '[S' + (index + 1) + ']',
-    document: chunk.documentName,
-    location: chunk.location,
-    excerpt: chunk.content.slice(0, 420),
-    relevance: Math.round(Math.min(1, chunk.score / (ranked[0]?.score || 1)) * 100),
-  }));
-  const queryTerms = terms(question);
-  const coverage = queryTerms.length
-    ? Math.round(new Set(ranked.flatMap((result) => terms(result.content))).size /
-      new Set(queryTerms).size * 100)
-    : 0;
-  res.json({
-    question,
-    answer: ranked.length
-      ? 'Here are the strongest matching passages from your workspace. This release uses transparent, extractive retrieval rather than generating unsupported claims. Read the cited excerpts before relying on a conclusion.'
-      : 'No matching evidence was found in the current workspace. Add relevant documents or try different wording.',
-    sources,
-    coverage: Math.min(100, coverage),
-    mode: 'extractive',
-    notice: 'A match is not proof that a claim is true. Verify the original source and context.',
-  });
+  const documentId = req.body?.documentId ? String(req.body.documentId).trim() : null;
+  if (documentId && !db.documents.some((document) => document.id === documentId)) {
+    return res.status(404).json({ error: 'The selected source was not found. Refresh the source library and try again.' });
+  }
+  return res.json(buildQueryResult(question, { documentId }));
+});
+
+app.get('/api/reports', (_req, res) => res.json(
+  db.reports.map(({ id, title, question, createdAt, sources, coverage, scope }) => ({
+    id, title, question, createdAt, sourceCount: sources.length, coverage, scope: scope?.documentName || 'All sources',
+  })),
+));
+
+app.post('/api/reports', async (req, res) => {
+  const question = String(req.body?.question || '').trim();
+  if (question.length < 4 || question.length > 1000) {
+    return res.status(400).json({ error: 'Question must be between 4 and 1,000 characters.' });
+  }
+  if (db.reports.length >= 100) {
+    return res.status(409).json({ error: 'This workspace has reached its limit of 100 saved reports. Delete an older report to continue.' });
+  }
+  const documentId = req.body?.documentId ? String(req.body.documentId).trim() : null;
+  if (documentId && !db.documents.some((document) => document.id === documentId)) {
+    return res.status(404).json({ error: 'The selected source was not found. Refresh the source library and try again.' });
+  }
+  const result = buildQueryResult(question, { documentId });
+  const report = {
+    id: randomUUID(),
+    title: question.length > 100 ? question.slice(0, 97) + '...' : question,
+    createdAt: new Date().toISOString(),
+    ...result,
+  };
+  try {
+    await updateWorkspace((current) => ({ reports: [report, ...(current.reports || [])] }));
+    return res.status(201).json({
+      id: report.id, title: report.title, question: report.question,
+      createdAt: report.createdAt, sourceCount: report.sources.length,
+      coverage: report.coverage, scope: report.scope.documentName,
+    });
+  } catch {
+    return res.status(500).json({ error: 'Could not save the evidence report.' });
+  }
+});
+
+app.get('/api/reports/:id/export', (req, res) => {
+  const report = db.reports.find((item) => item.id === req.params.id);
+  if (!report) return res.status(404).json({ error: 'Report not found.' });
+  const filename = (report.title || 'proofstack-report')
+    .normalize('NFKD').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'proofstack-report';
+  res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '.md"');
+  return res.send(renderReportMarkdown(report));
+});
+
+app.get('/api/reports/:id', (req, res) => {
+  const report = db.reports.find((item) => item.id === req.params.id);
+  if (!report) return res.status(404).json({ error: 'Report not found.' });
+  return res.json(report);
+});
+
+app.delete('/api/reports/:id', async (req, res) => {
+  let found = false;
+  try {
+    await updateWorkspace((current) => {
+      const reports = (current.reports || []).filter((report) => report.id !== req.params.id);
+      if (reports.length === (current.reports || []).length) return {};
+      found = true;
+      return { reports };
+    });
+    if (!found) return res.status(404).json({ error: 'Report not found.' });
+    return res.json({ ok: true });
+  } catch {
+    return res.status(500).json({ error: 'Could not save the report deletion.' });
+  }
+});
+
+function validateWorkspaceBackup(backup) {
+  if (!backup || backup.format !== 'proofstack-workspace' || backup.version !== 1) {
+    return 'Unsupported workspace backup format or version.';
+  }
+  if (!Array.isArray(backup.documents) || !Array.isArray(backup.chunks) || !Array.isArray(backup.reports)) {
+    return 'Workspace backup must contain documents, chunks and reports arrays.';
+  }
+  if (backup.documents.length > MAX_WORKSPACE_DOCUMENTS || backup.chunks.length > MAX_WORKSPACE_CHUNKS || backup.reports.length > 100) {
+    return 'Workspace backup exceeds the supported document, evidence or report count.';
+  }
+
+  const documentIds = new Set();
+  for (const document of backup.documents) {
+    if (!document || typeof document.id !== 'string' || !document.id || documentIds.has(document.id)
+      || typeof document.name !== 'string' || !document.name
+      || typeof document.type !== 'string' || !ALLOWED_EXTENSIONS.has('.' + document.type.toLowerCase())
+      || !Number.isSafeInteger(document.size) || document.size < 0
+      || typeof document.createdAt !== 'string' || !Number.isFinite(Date.parse(document.createdAt))
+      || !Number.isSafeInteger(document.chunkCount) || document.chunkCount < 0) {
+      return 'Workspace backup contains an invalid document record.';
+    }
+    documentIds.add(document.id);
+  }
+
+  const chunkIds = new Set();
+  const chunkCounts = new Map();
+  for (const chunk of backup.chunks) {
+    if (!chunk || typeof chunk.id !== 'string' || !chunk.id || chunkIds.has(chunk.id)
+      || typeof chunk.documentId !== 'string' || !documentIds.has(chunk.documentId)
+      || typeof chunk.documentName !== 'string' || typeof chunk.location !== 'string'
+      || typeof chunk.content !== 'string' || chunk.content.length > 10_000) {
+      return 'Workspace backup contains an invalid evidence record.';
+    }
+    chunkIds.add(chunk.id);
+    chunkCounts.set(chunk.documentId, (chunkCounts.get(chunk.documentId) || 0) + 1);
+  }
+  for (const document of backup.documents) {
+    if ((chunkCounts.get(document.id) || 0) !== document.chunkCount) {
+      return 'Workspace backup document evidence counts do not match its records.';
+    }
+  }
+
+  const reportIds = new Set();
+  for (const report of backup.reports) {
+    if (!report || typeof report.id !== 'string' || !report.id || reportIds.has(report.id)
+      || typeof report.title !== 'string' || report.title.length < 1 || report.title.length > 200
+      || typeof report.question !== 'string' || report.question.length < 4 || report.question.length > 1000
+      || typeof report.createdAt !== 'string' || !Number.isFinite(Date.parse(report.createdAt))
+      || !report.scope || !(report.scope.documentId === null || typeof report.scope.documentId === 'string')
+      || typeof report.scope.documentName !== 'string'
+      || !Array.isArray(report.sources) || report.sources.length > 6
+      || !Number.isFinite(report.coverage) || report.coverage < 0 || report.coverage > 100
+      || typeof report.answer !== 'string' || report.answer.length > 2000
+      || report.mode !== 'extractive'
+      || typeof report.notice !== 'string' || report.notice.length > 2000) {
+      return 'Workspace backup contains an invalid saved report.';
+    }
+    reportIds.add(report.id);
+    const citations = new Set();
+    for (const source of report.sources) {
+      if (!source || typeof source.citation !== 'string' || !/^\[S[1-6]\]$/.test(source.citation)
+        || citations.has(source.citation)
+        || typeof source.chunkId !== 'string' || !source.chunkId
+        || typeof source.documentId !== 'string' || !source.documentId
+        || typeof source.document !== 'string' || !source.document
+        || typeof source.location !== 'string' || source.location.length > 500
+        || typeof source.excerpt !== 'string' || source.excerpt.length > 420
+        || !Number.isFinite(source.relevance) || source.relevance < 0 || source.relevance > 100) {
+        return 'Workspace backup contains an invalid report citation.';
+      }
+      citations.add(source.citation);
+    }
+  }
+  return null;
+}
+
+app.get('/api/workspace/export', (_req, res) => {
+  const backup = {
+    format: 'proofstack-workspace',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    documents: db.documents,
+    chunks: db.chunks,
+    reports: db.reports || [],
+  };
+  const serialized = JSON.stringify(backup, null, 2);
+  if (Buffer.byteLength(serialized, 'utf8') > MAX_WORKSPACE_BACKUP_BYTES) {
+    return res.status(413).json({ error: 'Workspace backup exceeds the 50 MB export limit.' });
+  }
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="proofstack-workspace-backup.json"');
+  return res.send(serialized);
+});
+
+app.post('/api/workspace/import', workspaceBackupUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Choose a ProofStack workspace backup JSON file.' });
+  if (path.extname(req.file.originalname).toLowerCase() !== '.json') {
+    return res.status(415).json({ error: 'Workspace backups must be JSON files.' });
+  }
+  let backup;
+  try {
+    backup = JSON.parse(req.file.buffer.toString('utf8'));
+  } catch {
+    return res.status(422).json({ error: 'The selected backup is not valid JSON.' });
+  }
+  const validationError = validateWorkspaceBackup(backup);
+  if (validationError) return res.status(422).json({ error: validationError });
+
+  try {
+    await updateWorkspace(() => ({
+      documents: backup.documents,
+      chunks: backup.chunks,
+      reports: backup.reports,
+    }));
+    return res.json({
+      ok: true,
+      documents: backup.documents.length,
+      evidenceUnits: backup.chunks.length,
+      reports: backup.reports.length,
+    });
+  } catch {
+    return res.status(500).json({ error: 'Could not restore the workspace backup.' });
+  }
 });
 
 app.get('/api/overview', (_req, res) => {
