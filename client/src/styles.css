@@ -66,3 +66,9 @@
 .scope-picker select{max-width:210px;min-width:120px;padding:7px 9px;border:1px solid #e5e4ee;border-radius:7px;background:#fff;color:#55566b;font:inherit;font-size:11px}
 .scope-picker select:focus{outline:2px solid #d8d1f3;outline-offset:1px}
 @media(max-width:760px){.scope-picker{margin-left:0;flex:1}.scope-picker select{max-width:100%;flex:1;min-width:0}}
+
+/* Citation navigation */
+.source-open{display:inline-flex;align-items:center;gap:5px;margin-top:9px;padding:0;border:0;background:transparent;color:#7162b3;font:inherit;font-size:10px;font-weight:650;cursor:pointer}
+.source-open:hover{text-decoration:underline;color:#51448f}
+.evidence-inspector-item.focused{background:#f4f1ff;border-color:#bcb0ed;box-shadow:0 0 0 2px #ebe7ff}
+.evidence-inspector-item.focused b{color:#51448f}

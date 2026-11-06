@@ -166,6 +166,8 @@ function buildQueryResult(question, options = {}) {
     .slice(0, 6);
   const sources = ranked.map((chunk, index) => ({
     citation: '[S' + (index + 1) + ']',
+    chunkId: chunk.id,
+    documentId: chunk.documentId,
     document: chunk.documentName,
     location: chunk.location,
     excerpt: chunk.content.slice(0, 420),
@@ -295,10 +297,31 @@ app.get('/api/documents/:id/evidence', (req, res) => {
   const requestedLimit = Number.parseInt(req.query.limit, 10);
   const requestedOffset = Number.parseInt(req.query.offset, 10);
   const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(100, requestedLimit)) : 30;
-  const offset = Number.isFinite(requestedOffset) ? Math.max(0, requestedOffset) : 0;
   const matching = db.chunks.filter((chunk) => chunk.documentId === document.id);
-  const evidence = matching.slice(offset, offset + limit).map((chunk) => ({ id: chunk.id, location: chunk.location, excerpt: String(chunk.content || '').slice(0, 800) }));
-  return res.json({ document: { id: document.id, name: document.name, type: document.type, size: document.size, createdAt: document.createdAt, chunkCount: document.chunkCount }, total: matching.length, offset, limit, hasMore: offset + evidence.length < matching.length, evidence });
+  const requestedChunkId = String(req.query.chunkId || '').trim();
+  const targetIndex = requestedChunkId
+    ? matching.findIndex((chunk) => chunk.id === requestedChunkId)
+    : -1;
+  if (requestedChunkId && targetIndex < 0) {
+    return res.status(404).json({ error: 'Evidence passage not found in this document.' });
+  }
+  const offset = targetIndex >= 0
+    ? Math.max(0, targetIndex - Math.floor(limit / 2))
+    : Number.isFinite(requestedOffset) ? Math.max(0, requestedOffset) : 0;
+  const evidence = matching.slice(offset, offset + limit).map((chunk) => ({
+    id: chunk.id,
+    location: chunk.location,
+    excerpt: String(chunk.content || '').slice(0, 800),
+  }));
+  return res.json({
+    document: { id: document.id, name: document.name, type: document.type, size: document.size, createdAt: document.createdAt, chunkCount: document.chunkCount },
+    total: matching.length,
+    offset,
+    limit,
+    hasMore: offset + evidence.length < matching.length,
+    evidence,
+    focusedChunkId: targetIndex >= 0 ? requestedChunkId : null,
+  });
 });
 
 app.delete('/api/documents/:id', async (req, res) => {
