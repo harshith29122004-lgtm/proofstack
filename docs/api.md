@@ -10,6 +10,7 @@ The API is intended for the local single-user application. It does not implement
 | --- | --- | --- |
 | GET | `/api/health` | API health and index counts |
 | GET | `/api/documents` | List indexed documents |
+| GET | `/api/documents/:id/evidence` | List paginated extracted passages for one document |
 | POST | `/api/documents` | Upload and index multipart files |
 | DELETE | `/api/documents/:id` | Remove a document and its evidence |
 | POST | `/api/query` | Retrieve evidence for a question |
@@ -27,6 +28,12 @@ List indexed documents:
 
 ```bash
 curl http://127.0.0.1:8787/api/documents
+```
+
+Inspect the first 30 evidence passages for a document (the API clamps `limit` to 100 and supports `offset` pagination):
+
+```bash
+curl "http://127.0.0.1:8787/api/documents/DOCUMENT_ID/evidence?limit=30&offset=0"
 ```
 
 Upload the synthetic CSV fixture:

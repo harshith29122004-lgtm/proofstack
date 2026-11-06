@@ -13,7 +13,8 @@ ProofStack ingests common office documents, indexes their text into evidence chu
 - Split extracted text into evidence chunks while retaining document and page/sheet/row/section locators where available.
 - Retrieve ranked lexical matches with source excerpts and relevance signals.
 - Keep an on-disk local workspace with serialized writes and document removal.
-- Provide a React + TypeScript interface for browsing the workspace and querying evidence.
+- Provide a React + TypeScript interface for querying evidence and managing a searchable source library.
+- Inspect indexed passages for each source, including page, sheet, row or section locators, with paginated loading.
 
 ProofStack does **not** currently provide semantic/vector search, generated answers, claim-entailment verification, contradiction detection, OCR, authentication, multi-user access, or encrypted-at-rest storage. A relevance score is a ranking signal, not a truth or confidence score.
 
