@@ -7,6 +7,8 @@ The project is currently in an early prototype stage. There are no published rel
 ## Unreleased
 
 ### Added
+- Local Docker Compose deployment with an unprivileged API container, nginx frontend proxy and persistent named workspace volume.
+- CI container build and end-to-end smoke test through the published local web endpoint.
 - Versioned workspace JSON export and validated, atomic restore endpoints.
 - Workspace backup and restore controls in the Saved reports view.
 - Integration coverage for backup contents, malformed backup rejection and successful restore.

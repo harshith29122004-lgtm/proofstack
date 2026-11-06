@@ -24,6 +24,18 @@ ProofStack does **not** currently provide semantic/vector search, generated answ
 
 ## Quick start
 
+### Docker Compose (recommended for a local demo)
+
+Requirements: Docker Engine with the Compose plugin.
+
+```bash
+docker compose up --build
+```
+
+Open http://localhost:8080. The web UI is published only on loopback; the API remains internal to the Compose network and is reached through the web proxy. Workspace data persists in the named `proofstack-data` volume. Stop the stack with `docker compose down` (use `docker compose down -v` only if you intentionally want to delete the workspace volume).
+
+### Node.js development
+
 Requirements: Node.js 20 or newer and npm.
 
 ```bash
@@ -58,10 +70,12 @@ For environment variables and host-binding details, see [server configuration](d
 
 ```text
 client/       React, TypeScript and Vite application
-server/       Express API, parsers, workspace persistence and tests
+server/       Express API, parsers, workspace persistence, tests and Dockerfile
+client/       React app, nginx configuration and Dockerfile
 examples/     Synthetic sample documents for local evaluation
 docs/         Developer and API documentation
 .github/      CI, CodeQL, Dependabot and contribution templates
+docker-compose.yml  Local-only web/API deployment with a persistent data volume
 ```
 
 ## Evidence and privacy principles

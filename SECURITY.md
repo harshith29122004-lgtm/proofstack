@@ -12,10 +12,10 @@ Include the affected version/commit, impact, and safe reproduction steps. Allow 
 
 ## Deployment and data handling
 
-- Keep the API bound to loopback unless you have independently designed and implemented authentication, authorization, and network controls.
+- Keep the API bound to loopback unless you have independently designed and implemented authentication, authorization, and network controls. The Docker Compose demo publishes only the web UI on `127.0.0.1:8080`; the API is internal to the Compose network.
 - Do not expose this prototype directly to the public internet or use it as a multi-user service.
 - Do not upload confidential, regulated, or otherwise sensitive documents to a shared or untrusted machine.
-- Workspace documents and extracted text are stored locally in `server/data/workspace.json`; protect that directory and its backups.
+- Workspace documents and extracted text are stored locally in `server/data/workspace.json` (or the Compose `proofstack-data` volume); protect that directory, Docker host and backups.
 - Uploads are held in memory and constrained by file-count, file-size, request-part, and extracted-text limits. These controls reduce resource exposure but are not a substitute for parser sandboxing.
 - Treat uploaded files as untrusted input. Keep Node.js and parser dependencies updated.
 
