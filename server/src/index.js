@@ -130,6 +130,9 @@ async function extract(file) {
     });
   }
   if (extension === '.csv') {
+    if (file.buffer.length > 1024 * 1024) {
+      throw new Error('CSV files must not exceed 1 MB.');
+    }
     const rows = parseCsv(file.buffer.toString('utf8'), {
       relax_quotes: true,
       skip_empty_lines: true,
