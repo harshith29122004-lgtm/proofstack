@@ -30,18 +30,16 @@ export function score(query, content) {
     const frequency = frequencies.get(term) || 0;
     if (!frequency) continue;
     matchedTerms += 1;
-    // Diminishing returns prevent repeated words from dominating relevance.
     value += (1 + Math.log(frequency)) *
       (1 + Math.log(1 + documentTerms.length / (1 + frequency)));
   }
 
   if (!matchedTerms) return 0;
 
-  // Reward passages that cover more of the query, not just one repeated keyword.
+  // Coverage matters more than repeating one keyword many times.
   const coverage = matchedTerms / uniqueQueryTerms.length;
-  value *= 1 + coverage * 0.5;
+  value *= 1 + coverage;
 
-  // Phrase matching is token-based, avoiding false positives such as "cat" in "education".
   if (queryTerms.length > 1) {
     const phraseFound = documentTerms.some((term, index) =>
       term === queryTerms[0] &&
@@ -82,7 +80,6 @@ export function splitChunks(text, source, max = 900) {
   }
 
   function pushOversizedParagraph(paragraph) {
-    // Array.from splits by Unicode code point, never halfway through a surrogate pair.
     const characters = Array.from(paragraph);
     for (let index = 0; index < characters.length; index += max) {
       chunks.push(make(characters.slice(index, index + max).join(''), part++));
