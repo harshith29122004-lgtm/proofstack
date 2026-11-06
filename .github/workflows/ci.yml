@@ -37,5 +37,34 @@ jobs:
           node-version: 22
       - name: Install client dependencies
         run: npm install --prefix client --no-audit --no-fund
+      - name: Run client component tests
+        run: npm test --prefix client
       - name: Build client
         run: npm run build --prefix client
+  container-smoke:
+    name: Docker Compose build and smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+      - name: Build and start local stack
+        run: docker compose up --build -d
+      - name: Smoke test frontend and proxied API
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'docker compose down -v' EXIT
+          ready=0
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:8080/api/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = "1"
+          curl --fail --silent http://127.0.0.1:8080/ | grep -q 'id="root"'
+          printf 'Release owner is Alice. Release deadline is Friday.\n' > /tmp/proofstack-smoke.txt
+          curl --fail --silent -F "files=@/tmp/proofstack-smoke.txt" http://127.0.0.1:8080/api/documents | grep -q '"documents"'
+          curl --fail --silent -H 'Content-Type: application/json' -d '{"question":"release owner deadline Friday"}' http://127.0.0.1:8080/api/query | grep -q '"chunkId"'
