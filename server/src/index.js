@@ -316,7 +316,7 @@ app.delete('/api/documents/:id', async (req, res) => {
 app.post('/api/query', (req, res) => {
   const question = String(req.body?.question || '').trim();
   if (question.length < 4 || question.length > 1000) {
-    return res.status(400).json({ error: 'Question must be between 4 and 1,000 characters.' });
+    return res.status(400).json({ error: 'Ask a more specific question (at least 4 characters and no more than 1,000).' });
   }
   return res.json(buildQueryResult(question));
 });
