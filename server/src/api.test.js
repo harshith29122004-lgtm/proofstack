@@ -115,6 +115,15 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
     });
     assert.equal(tooManyResponse.status, 413);
 
+    const oversizedCsv = new FormData();
+    oversizedCsv.append('files', new Blob(['value\n' + 'x'.repeat(1024 * 1024 + 1)]), 'oversized.csv');
+    const oversizedCsvResponse = await fetch(`${baseUrl}/api/documents`, {
+      method: 'POST',
+      body: oversizedCsv,
+    });
+    assert.equal(oversizedCsvResponse.status, 422);
+    assert.match((await oversizedCsvResponse.json()).error, /could not process/i);
+
     const validA = new FormData();
     validA.append('files', new Blob(['The launch deadline is Friday and the project owner is Alex.']), 'project-brief.txt');
     const validB = new FormData();

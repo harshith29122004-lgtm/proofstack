@@ -134,6 +134,9 @@ async function extract(file) {
       relax_quotes: true,
       skip_empty_lines: true,
       bom: true,
+      // Keep CSV ingestion bounded like spreadsheet ingestion. Include the header.
+      to: 10_001,
+      max_record_size: 1024 * 1024,
     });
     const headers = rows[0] || [];
     return rows.slice(1).map((row, index) => ({
