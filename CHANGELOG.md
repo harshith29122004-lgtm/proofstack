@@ -7,6 +7,9 @@ The project is currently in an early prototype stage. There are no published rel
 ## Unreleased
 
 ### Added
+- In-app saved-report reader with preserved evidence excerpts, source navigation, and archived-source messaging.
+- Strict workspace restore validation for unique report IDs, report scope metadata, citation identity fields and relevance-score ranges.
+- Regression coverage for malformed saved-report metadata and citations in imported backups.
 - Local Docker Compose deployment with an unprivileged API container, nginx frontend proxy and persistent named workspace volume.
 - CI container build and end-to-end smoke test through the published local web endpoint.
 - Versioned workspace JSON export and validated, atomic restore endpoints.

@@ -114,7 +114,7 @@ curl -X POST http://127.0.0.1:8787/api/workspace/import \
   -F "file=@proofstack-workspace-backup.json"
 ```
 
-Restore replaces the current workspace. The API validates the backup format, record relationships, evidence counts and configured limits before writing it atomically. Keep a separate copy of the backup; do not restore an untrusted file into a workspace containing data you need to keep. The maximum backup size is 50 MB.
+Restore replaces the current workspace. The API validates the backup format, document/evidence relationships, per-document evidence counts, unique report IDs, report scope metadata, citation fields and score ranges, plus configured record and size limits before writing it atomically. Saved report citations are historical snapshots, so they remain valid even if their original source document has since been removed. Keep a separate copy of the backup; do not restore an untrusted file into a workspace containing data you need to keep. The maximum backup size is 50 MB.
 
 ## Upload constraints
 
