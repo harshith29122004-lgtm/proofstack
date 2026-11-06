@@ -16,11 +16,15 @@ const HOST = process.env.HOST || '127.0.0.1';
 const DATA_DIR = path.resolve('data');
 const DB_FILE = path.join(DATA_DIR, 'workspace.json');
 const MAX_EXTRACTED_CHARACTERS = 5_000_000;
+const MAX_WORKSPACE_BACKUP_BYTES = 50 * 1024 * 1024;
+const MAX_WORKSPACE_DOCUMENTS = 1000;
+const MAX_WORKSPACE_CHUNKS = 100_000;
 const ALLOWED_EXTENSIONS = new Set([
   '.pdf', '.docx', '.xlsx', '.xls', '.csv', '.txt', '.md', '.json', '.log',
 ]);
 
 const storage = multer.memoryStorage();
+const workspaceBackupUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_WORKSPACE_BACKUP_BYTES, files: 1 } });
 const upload = multer({
   storage,
   limits: {
@@ -421,6 +425,118 @@ app.delete('/api/reports/:id', async (req, res) => {
     return res.json({ ok: true });
   } catch {
     return res.status(500).json({ error: 'Could not save the report deletion.' });
+  }
+});
+
+function validateWorkspaceBackup(backup) {
+  if (!backup || backup.format !== 'proofstack-workspace' || backup.version !== 1) {
+    return 'Unsupported workspace backup format or version.';
+  }
+  if (!Array.isArray(backup.documents) || !Array.isArray(backup.chunks) || !Array.isArray(backup.reports)) {
+    return 'Workspace backup must contain documents, chunks and reports arrays.';
+  }
+  if (backup.documents.length > MAX_WORKSPACE_DOCUMENTS || backup.chunks.length > MAX_WORKSPACE_CHUNKS || backup.reports.length > 100) {
+    return 'Workspace backup exceeds the supported document, evidence or report count.';
+  }
+
+  const documentIds = new Set();
+  for (const document of backup.documents) {
+    if (!document || typeof document.id !== 'string' || !document.id || documentIds.has(document.id)
+      || typeof document.name !== 'string' || !document.name
+      || typeof document.type !== 'string' || !ALLOWED_EXTENSIONS.has('.' + document.type.toLowerCase())
+      || !Number.isSafeInteger(document.size) || document.size < 0
+      || typeof document.createdAt !== 'string' || !Number.isFinite(Date.parse(document.createdAt))
+      || !Number.isSafeInteger(document.chunkCount) || document.chunkCount < 0) {
+      return 'Workspace backup contains an invalid document record.';
+    }
+    documentIds.add(document.id);
+  }
+
+  const chunkIds = new Set();
+  const chunkCounts = new Map();
+  for (const chunk of backup.chunks) {
+    if (!chunk || typeof chunk.id !== 'string' || !chunk.id || chunkIds.has(chunk.id)
+      || typeof chunk.documentId !== 'string' || !documentIds.has(chunk.documentId)
+      || typeof chunk.documentName !== 'string' || typeof chunk.location !== 'string'
+      || typeof chunk.content !== 'string' || chunk.content.length > 10_000) {
+      return 'Workspace backup contains an invalid evidence record.';
+    }
+    chunkIds.add(chunk.id);
+    chunkCounts.set(chunk.documentId, (chunkCounts.get(chunk.documentId) || 0) + 1);
+  }
+  for (const document of backup.documents) {
+    if ((chunkCounts.get(document.id) || 0) !== document.chunkCount) {
+      return 'Workspace backup document evidence counts do not match its records.';
+    }
+  }
+
+  for (const report of backup.reports) {
+    if (!report || typeof report.id !== 'string' || !report.id
+      || typeof report.title !== 'string' || typeof report.question !== 'string'
+      || report.question.length < 4 || report.question.length > 1000
+      || typeof report.createdAt !== 'string' || !Number.isFinite(Date.parse(report.createdAt))
+      || !Array.isArray(report.sources) || report.sources.length > 6
+      || !Number.isFinite(report.coverage) || report.coverage < 0 || report.coverage > 100
+      || typeof report.answer !== 'string' || typeof report.notice !== 'string') {
+      return 'Workspace backup contains an invalid saved report.';
+    }
+    for (const source of report.sources) {
+      if (!source || typeof source.document !== 'string' || typeof source.location !== 'string'
+        || typeof source.excerpt !== 'string' || !Number.isFinite(source.relevance)
+        || source.relevance < 0 || source.relevance > 100) {
+        return 'Workspace backup contains an invalid report citation.';
+      }
+    }
+  }
+  return null;
+}
+
+app.get('/api/workspace/export', (_req, res) => {
+  const backup = {
+    format: 'proofstack-workspace',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    documents: db.documents,
+    chunks: db.chunks,
+    reports: db.reports || [],
+  };
+  const serialized = JSON.stringify(backup, null, 2);
+  if (Buffer.byteLength(serialized, 'utf8') > MAX_WORKSPACE_BACKUP_BYTES) {
+    return res.status(413).json({ error: 'Workspace backup exceeds the 50 MB export limit.' });
+  }
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="proofstack-workspace-backup.json"');
+  return res.send(serialized);
+});
+
+app.post('/api/workspace/import', workspaceBackupUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Choose a ProofStack workspace backup JSON file.' });
+  if (path.extname(req.file.originalname).toLowerCase() !== '.json') {
+    return res.status(415).json({ error: 'Workspace backups must be JSON files.' });
+  }
+  let backup;
+  try {
+    backup = JSON.parse(req.file.buffer.toString('utf8'));
+  } catch {
+    return res.status(422).json({ error: 'The selected backup is not valid JSON.' });
+  }
+  const validationError = validateWorkspaceBackup(backup);
+  if (validationError) return res.status(422).json({ error: validationError });
+
+  try {
+    await updateWorkspace(() => ({
+      documents: backup.documents,
+      chunks: backup.chunks,
+      reports: backup.reports,
+    }));
+    return res.json({
+      ok: true,
+      documents: backup.documents.length,
+      evidenceUnits: backup.chunks.length,
+      reports: backup.reports.length,
+    });
+  } catch {
+    return res.status(500).json({ error: 'Could not restore the workspace backup.' });
   }
 });
 

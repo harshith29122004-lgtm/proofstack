@@ -7,6 +7,9 @@ The project is currently in an early prototype stage. There are no published rel
 ## Unreleased
 
 ### Added
+- Versioned workspace JSON export and validated, atomic restore endpoints.
+- Workspace backup and restore controls in the Saved reports view.
+- Integration coverage for backup contents, malformed backup rejection and successful restore.
 - Direct citation-to-source navigation using stable document and evidence-chunk IDs.
 - Evidence inspector deep-linking to a centered passage window and highlighting the cited chunk.
 - Regression tests for exact passage lookup and rejection of cross-document chunk IDs.
