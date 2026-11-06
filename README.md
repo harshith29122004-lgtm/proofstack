@@ -5,11 +5,11 @@ Evidence-first, local-first document workspace for traceable decisions.
 ProofStack ingests common office documents, indexes text into evidence units, and retrieves relevant passages with source references. It intentionally does not pretend a text match proves a claim or fabricate an AI answer.
 
 ## Features in v0.1
-- Multi-file upload (15 MB/file; up to 12 files per request)
+- Multi-file upload (10 MB/file; up to 5 files per request)
 - PDF, DOCX, XLSX, XLS, CSV, TXT, Markdown, JSON and LOG extraction
 - Chunked evidence indexing with source document and page/sheet/row/section locators
 - Ranked lexical retrieval with source excerpts and relevance ranking
-- Local JSON persistence, document removal, API health and overview endpoints
+- Local JSON persistence with serialized writes, document removal, API health and overview endpoints
 - Responsive React/TypeScript interface
 
 ## Architecture
@@ -24,7 +24,7 @@ npm install --prefix server
 npm install --prefix client
 npm run dev
 ```
-Open http://localhost:5173. API: http://localhost:8787.
+Open http://localhost:5173. API: http://127.0.0.1:8787 (bound to loopback by default).
 
 ```bash
 npm test

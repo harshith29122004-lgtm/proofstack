@@ -49,27 +49,57 @@ app.use(cors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] }));
 app.use(express.json({ limit: '1mb' }));
 
 let db = { documents: [], chunks: [] };
+let workspaceMutationQueue = Promise.resolve();
+
 await fs.mkdir(DATA_DIR, { recursive: true });
+let workspaceContents;
 try {
-  const stored = JSON.parse(await fs.readFile(DB_FILE, 'utf8'));
-  if (Array.isArray(stored.documents) && Array.isArray(stored.chunks)) db = stored;
-  else throw new Error('Invalid workspace structure');
+  workspaceContents = await fs.readFile(DB_FILE, 'utf8');
 } catch (error) {
   if (error.code !== 'ENOENT') {
-    console.error('Workspace data could not be loaded; starting with an empty workspace.');
+    throw new Error(`Could not read workspace data at ${DB_FILE}; refusing to overwrite it.`, { cause: error });
   }
+}
+if (workspaceContents !== undefined) {
+  // Fail closed on corrupt or unexpected data. Never replace a user's workspace with an empty one.
+  const stored = JSON.parse(workspaceContents);
+  if (!stored || !Array.isArray(stored.documents) || !Array.isArray(stored.chunks)) {
+    throw new Error('Workspace data has an invalid structure; refusing to overwrite it.');
+  }
+  db = stored;
+} else {
   await persist();
 }
 
 async function persist() {
   const temporaryFile = path.join(DATA_DIR, `.workspace-${randomUUID()}.tmp`);
   try {
-    await fs.writeFile(temporaryFile, JSON.stringify(db, null, 2), { encoding: 'utf8', mode: 0o600 });
+    await fs.writeFile(temporaryFile, JSON.stringify(db, null, 2), {
+      encoding: 'utf8',
+      mode: 0o600,
+      flag: 'wx',
+    });
     await fs.rename(temporaryFile, DB_FILE);
   } catch (error) {
     await fs.rm(temporaryFile, { force: true }).catch(() => {});
     throw error;
   }
+}
+
+// Serialize all workspace mutations so concurrent uploads/deletions cannot overwrite each other.
+function updateWorkspace(update) {
+  const operation = workspaceMutationQueue.then(async () => {
+    const previous = db;
+    db = update(db);
+    try {
+      await persist();
+    } catch (error) {
+      db = previous;
+      throw error;
+    }
+  });
+  workspaceMutationQueue = operation.catch(() => {});
+  return operation;
 }
 
 async function extract(file) {
@@ -164,18 +194,10 @@ app.post('/api/documents', upload.array('files', 5), async (req, res) => {
       stagedChunks.push(...chunks);
     }
 
-    const previousDocuments = db.documents;
-    const previousChunks = db.chunks;
-    db = {
-      documents: [...db.documents, ...stagedDocuments],
-      chunks: [...db.chunks, ...stagedChunks],
-    };
-    try {
-      await persist();
-    } catch (error) {
-      db = { documents: previousDocuments, chunks: previousChunks };
-      throw error;
-    }
+    await updateWorkspace((current) => ({
+      documents: [...current.documents, ...stagedDocuments],
+      chunks: [...current.chunks, ...stagedChunks],
+    }));
 
     res.status(201).json({
       documents: stagedDocuments,
@@ -188,21 +210,20 @@ app.post('/api/documents', upload.array('files', 5), async (req, res) => {
 });
 
 app.delete('/api/documents/:id', async (req, res) => {
-  const previousDocuments = db.documents;
-  const previousChunks = db.chunks;
-  const documents = db.documents.filter((document) => document.id !== req.params.id);
-  if (documents.length === previousDocuments.length) {
-    return res.status(404).json({ error: 'Document not found.' });
-  }
-  db = {
-    documents,
-    chunks: db.chunks.filter((chunk) => chunk.documentId !== req.params.id),
-  };
+  let found = false;
   try {
-    await persist();
+    await updateWorkspace((current) => {
+      const documents = current.documents.filter((document) => document.id !== req.params.id);
+      if (documents.length === current.documents.length) return current;
+      found = true;
+      return {
+        documents,
+        chunks: current.chunks.filter((chunk) => chunk.documentId !== req.params.id),
+      };
+    });
+    if (!found) return res.status(404).json({ error: 'Document not found.' });
     res.json({ ok: true });
-  } catch (error) {
-    db = { documents: previousDocuments, chunks: previousChunks };
+  } catch {
     res.status(500).json({ error: 'Could not save the workspace change.' });
   }
 });

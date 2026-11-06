@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -115,16 +115,22 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
     });
     assert.equal(tooManyResponse.status, 413);
 
-    const valid = new FormData();
-    valid.append('files', new Blob(['The launch deadline is Friday and the project owner is Alex.']), 'project-brief.txt');
-    const uploadResponse = await fetch(`${baseUrl}/api/documents`, {
-      method: 'POST',
-      body: valid,
-    });
-    assert.equal(uploadResponse.status, 201);
-    const uploaded = await uploadResponse.json();
-    assert.equal(uploaded.documents.length, 1);
-    assert.ok(uploaded.totalChunks > 0);
+    const validA = new FormData();
+    validA.append('files', new Blob(['The launch deadline is Friday and the project owner is Alex.']), 'project-brief.txt');
+    const validB = new FormData();
+    validB.append('files', new Blob(['The support contact is Morgan and the service window is Monday.']), 'support-brief.txt');
+    const [uploadResponseA, uploadResponseB] = await Promise.all([
+      fetch(`${baseUrl}/api/documents`, { method: 'POST', body: validA }),
+      fetch(`${baseUrl}/api/documents`, { method: 'POST', body: validB }),
+    ]);
+    assert.equal(uploadResponseA.status, 201);
+    assert.equal(uploadResponseB.status, 201);
+    const uploadedA = await uploadResponseA.json();
+    const uploadedB = await uploadResponseB.json();
+    assert.equal(uploadedA.documents.length, 1);
+    assert.equal(uploadedB.documents.length, 1);
+    assert.ok(uploadedA.totalChunks > 0);
+    assert.ok(uploadedB.totalChunks > 0);
 
     const queryResponse = await fetch(`${baseUrl}/api/query`, {
       method: 'POST',
@@ -137,18 +143,58 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
     assert.match(query.sources[0].excerpt, /deadline is Friday/i);
 
     const afterUpload = await fetch(`${baseUrl}/api/overview`).then((response) => response.json());
-    assert.equal(afterUpload.documents, 1);
+    assert.equal(afterUpload.documents, 2);
     assert.ok(afterUpload.evidenceUnits > 0);
 
-    const deleteResponse = await fetch(`${baseUrl}/api/documents/${uploaded.documents[0].id}`, {
-      method: 'DELETE',
-    });
-    assert.equal(deleteResponse.status, 200);
+    const deleteResponses = await Promise.all([
+      fetch(`${baseUrl}/api/documents/${uploadedA.documents[0].id}`, { method: 'DELETE' }),
+      fetch(`${baseUrl}/api/documents/${uploadedB.documents[0].id}`, { method: 'DELETE' }),
+    ]);
+    assert.deepEqual(deleteResponses.map((response) => response.status), [200, 200]);
     const afterDelete = await fetch(`${baseUrl}/api/overview`).then((response) => response.json());
     assert.equal(afterDelete.documents, 0);
     assert.equal(afterDelete.evidenceUnits, 0);
   } catch (error) {
     if (stderr) error.message += `\nAPI stderr: ${stderr}`;
     throw error;
+  }
+});
+
+
+test('startup refuses to overwrite a corrupt workspace file', async () => {
+  const isolatedDirectory = await mkdtemp(path.join(tmpdir(), 'proofstack-corrupt-workspace-'));
+  const dataDirectory = path.join(isolatedDirectory, 'data');
+  const workspaceFile = path.join(dataDirectory, 'workspace.json');
+  await mkdir(dataDirectory, { recursive: true });
+  const originalContents = '{ this is not valid JSON and must be preserved';
+  await writeFile(workspaceFile, originalContents, 'utf8');
+
+  const entrypoint = fileURLToPath(new URL('./index.js', import.meta.url));
+  const child = spawn(process.execPath, [entrypoint], {
+    cwd: isolatedDirectory,
+    env: { ...process.env, PORT: '0', HOST: '127.0.0.1' },
+    stdio: ['ignore', 'ignore', 'pipe'],
+  });
+
+  try {
+    const exitCode = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        child.kill('SIGKILL');
+        reject(new Error('API did not fail promptly for a corrupt workspace.'));
+      }, 3000);
+      child.once('error', (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+      child.once('exit', (code) => {
+        clearTimeout(timeout);
+        resolve(code);
+      });
+    });
+    assert.equal(exitCode, 1);
+    assert.equal(await readFile(workspaceFile, 'utf8'), originalContents);
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    await rm(isolatedDirectory, { recursive: true, force: true });
   }
 });
