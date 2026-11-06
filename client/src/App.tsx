@@ -6,7 +6,7 @@ type Result={question:string;answer:string;sources:Source[];coverage:number;mode
 type EvidenceItem={id:string;location:string;excerpt:string};
 type EvidenceResponse={document:Doc;total:number;offset:number;limit:number;hasMore:boolean;evidence:EvidenceItem[]};
 type SavedReport={id:string;title:string;question:string;createdAt:string;sourceCount:number;coverage:number;scope:string};
-const API=import.meta.env.VITE_API_URL||'http://localhost:8787';
+const API=import.meta.env.VITE_API_URL??'http://localhost:8787';
 const fmt=(n:number)=>n<1024?`${n} B`:n<1048576?`${(n/1024).toFixed(1)} KB`:`${(n/1048576).toFixed(1)} MB`;
 export default function App(){
  const[docs,setDocs]=useState<Doc[]>([]),[question,setQuestion]=useState(''),[result,setResult]=useState<Result|null>(null);
