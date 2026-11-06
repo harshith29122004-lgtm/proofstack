@@ -151,6 +151,41 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
     assert.equal(query.sources.length, 1);
     assert.match(query.sources[0].excerpt, /deadline is Friday/i);
 
+    const reportCreateResponse = await fetch(`${baseUrl}/api/reports`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'launch deadline Friday' }),
+    });
+    assert.equal(reportCreateResponse.status, 201);
+    const savedReport = await reportCreateResponse.json();
+    assert.equal(savedReport.sourceCount, 1);
+    assert.ok(savedReport.id);
+
+    const reportList = await fetch(`${baseUrl}/api/reports`).then((response) => response.json());
+    assert.equal(reportList.length, 1);
+    assert.equal(reportList[0].id, savedReport.id);
+
+    const reportDetail = await fetch(`${baseUrl}/api/reports/${savedReport.id}`).then((response) => response.json());
+    assert.equal(reportDetail.sources.length, 1);
+    assert.match(reportDetail.sources[0].excerpt, /deadline is Friday/i);
+
+    const reportExportResponse = await fetch(`${baseUrl}/api/reports/${savedReport.id}/export`);
+    assert.equal(reportExportResponse.status, 200);
+    assert.match(reportExportResponse.headers.get('content-type'), /text\/markdown/);
+    assert.match(reportExportResponse.headers.get('content-disposition'), /attachment; filename=/);
+    const reportMarkdown = await reportExportResponse.text();
+    assert.match(reportMarkdown, /Research question/);
+    assert.match(reportMarkdown, /project-brief\.txt/);
+    assert.match(reportMarkdown, /deadline is Friday/i);
+    assert.match(reportMarkdown, /Verification note/);
+
+    const invalidReport = await fetch(`${baseUrl}/api/reports`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'abc' }),
+    });
+    assert.equal(invalidReport.status, 400);
+
     const afterUpload = await fetch(`${baseUrl}/api/overview`).then((response) => response.json());
     assert.equal(afterUpload.documents, 2);
     assert.ok(afterUpload.evidenceUnits > 0);
@@ -160,6 +195,14 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
       fetch(`${baseUrl}/api/documents/${uploadedB.documents[0].id}`, { method: 'DELETE' }),
     ]);
     assert.deepEqual(deleteResponses.map((response) => response.status), [200, 200]);
+    const reportAfterDocumentDelete = await fetch(`${baseUrl}/api/reports/${savedReport.id}`);
+    assert.equal(reportAfterDocumentDelete.status, 200, 'saved report retains its evidence snapshot after source deletion');
+
+    const reportDelete = await fetch(`${baseUrl}/api/reports/${savedReport.id}`, { method: 'DELETE' });
+    assert.equal(reportDelete.status, 200);
+    assert.equal((await fetch(`${baseUrl}/api/reports`).then((response) => response.json())).length, 0);
+    assert.equal((await fetch(`${baseUrl}/api/reports/${savedReport.id}`)).status, 404);
+
     const afterDelete = await fetch(`${baseUrl}/api/overview`).then((response) => response.json());
     assert.equal(afterDelete.documents, 0);
     assert.equal(afterDelete.evidenceUnits, 0);
