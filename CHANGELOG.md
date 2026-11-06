@@ -7,6 +7,8 @@ The project is currently in an early prototype stage. There are no published rel
 ## Unreleased
 
 ### Added
+- React component test suite covering source-scope controls, source-library navigation, saved-report rendering and persistent upload/backup controls.
+- Root `npm run test:client` command and client test execution in CI.
 - Local Docker Compose deployment with an unprivileged API container, nginx frontend proxy and persistent named workspace volume.
 - CI container build and end-to-end smoke test through the published local web endpoint.
 - Versioned workspace JSON export and validated, atomic restore endpoints.
