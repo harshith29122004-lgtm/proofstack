@@ -20,6 +20,8 @@ The API is intended for the local single-user application. It does not implement
 | DELETE | `/api/reports/:id` | Delete a saved report |
 | POST | `/api/query` | Retrieve evidence for a question, optionally scoped to one source |
 | GET | `/api/overview` | Workspace counts and storage overview |
+| GET | `/api/workspace/export` | Download a versioned JSON workspace backup (maximum 50 MB) |
+| POST | `/api/workspace/import` | Validate and restore a JSON backup, replacing current workspace data |
 
 ## Examples
 
@@ -96,6 +98,23 @@ Remove a document (replace the placeholder with an ID returned by the documents 
 ```bash
 curl -X DELETE "http://127.0.0.1:8787/api/documents/DOCUMENT_ID"
 ```
+
+## Workspace backup and restore
+
+Export a complete backup of documents, extracted evidence and saved reports:
+
+```bash
+curl -OJ http://127.0.0.1:8787/api/workspace/export
+```
+
+Restore a backup using multipart form data:
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/workspace/import \
+  -F "file=@proofstack-workspace-backup.json"
+```
+
+Restore replaces the current workspace. The API validates the backup format, record relationships, evidence counts and configured limits before writing it atomically. Keep a separate copy of the backup; do not restore an untrusted file into a workspace containing data you need to keep. The maximum backup size is 50 MB.
 
 ## Upload constraints
 

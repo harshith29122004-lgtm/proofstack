@@ -18,6 +18,7 @@ ProofStack ingests common office documents, indexes their text into evidence chu
 - Open a search citation directly in the source inspector, centered on and highlighting the exact retrieved passage.
 - Save evidence-query snapshots in the local workspace—including the selected source scope—and export cited passages, source locations, relevance signals and verification notes as Markdown.
 - Browse and delete saved reports; report snapshots remain available if the original source document is later removed.
+- Export the complete local workspace—including sources, extracted evidence and saved reports—to a versioned JSON backup, then restore it with validation.
 
 ProofStack does **not** currently provide semantic/vector search, generated answers, claim-entailment verification, contradiction detection, OCR, authentication, multi-user access, or encrypted-at-rest storage. Saved reports are snapshots of extractive retrieval—not independently verified findings. A relevance score is a ranking signal, not a truth or confidence score.
 
