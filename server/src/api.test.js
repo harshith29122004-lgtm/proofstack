@@ -257,9 +257,37 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
     assert.equal((await fetch(`${baseUrl}/api/reports`).then((response) => response.json())).length, 0);
     assert.equal((await fetch(`${baseUrl}/api/reports/${savedReport.id}`)).status, 404);
 
+    const backupResponse = await fetch(`${baseUrl}/api/workspace/export`);
+    assert.equal(backupResponse.status, 200);
+    assert.match(backupResponse.headers.get('content-type'), /application\/json/);
+    assert.match(backupResponse.headers.get('content-disposition'), /proofstack-workspace-backup\.json/);
+    const backup = await backupResponse.json();
+    assert.equal(backup.format, 'proofstack-workspace');
+    assert.equal(backup.version, 1);
+    assert.equal(backup.documents.length, 2);
+    assert.ok(backup.chunks.length > 0);
+    assert.equal(backup.reports.length, 2);
+
     const afterDelete = await fetch(`${baseUrl}/api/overview`).then((response) => response.json());
     assert.equal(afterDelete.documents, 0);
     assert.equal(afterDelete.evidenceUnits, 0);
+
+    const invalidBackupForm = new FormData();
+    invalidBackupForm.append('file', new Blob(['not json']), 'broken.json');
+    const invalidBackupResponse = await fetch(`${baseUrl}/api/workspace/import`, { method: 'POST', body: invalidBackupForm });
+    assert.equal(invalidBackupResponse.status, 422);
+    assert.equal((await fetch(`${baseUrl}/api/overview`).then((response) => response.json())).documents, 0);
+
+    const restoreForm = new FormData();
+    restoreForm.append('file', new Blob([JSON.stringify(backup)], { type: 'application/json' }), 'proofstack-workspace-backup.json');
+    const restoreResponse = await fetch(`${baseUrl}/api/workspace/import`, { method: 'POST', body: restoreForm });
+    assert.equal(restoreResponse.status, 200);
+    const restored = await restoreResponse.json();
+    assert.equal(restored.documents, 2);
+    assert.equal(restored.evidenceUnits, backup.chunks.length);
+    assert.equal(restored.reports, 2);
+    assert.equal((await fetch(`${baseUrl}/api/reports`).then((response) => response.json())).length, 2);
+
   } catch (error) {
     if (stderr) error.message += `\nAPI stderr: ${stderr}`;
     throw error;
