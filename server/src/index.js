@@ -271,4 +271,4 @@ app.use((error, _req, res, _next) => {
 
 app.listen(PORT, HOST, () => {
   console.log(`ProofStack API listening on http://${HOST}:${PORT}`);
-});Ã¿
+});
