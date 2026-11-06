@@ -183,7 +183,7 @@ function buildQueryResult(question) {
 }
 
 function escapeMarkdown(value) {
-  return String(value ?? '').replace(/[\\`*_{}\[\]()#+.!|>]/g, '\\app.get('/api/health',').replace(/[\r\n]+/g, ' ');
+  return String(value ?? '').replace(/[\r\n]+/g, ' ').replaceAll('|', '\\|');
 }
 
 function renderReportMarkdown(report) {
