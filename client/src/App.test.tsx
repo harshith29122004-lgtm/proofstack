@@ -51,7 +51,7 @@ describe('ProofStack workspace navigation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Source library/ }));
     expect(await screen.findByRole('heading', { name: 'Source library' })).toBeInTheDocument();
-    expect(screen.getByText('brief.txt')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /brief\\.txt/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Saved reports/ }));
     expect(await screen.findByRole('heading', { name: 'Saved reports' })).toBeInTheDocument();
