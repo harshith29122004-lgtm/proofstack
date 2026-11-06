@@ -10,6 +10,8 @@ const fmt=(n:number)=>n<1024?`${n} B`:n<1048576?`${(n/1024).toFixed(1)} KB`:`${(
 export default function App(){
  const[docs,setDocs]=useState<Doc[]>([]),[question,setQuestion]=useState(''),[result,setResult]=useState<Result|null>(null);
  const[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[error,setError]=useState(''),[tab,setTab]=useState<'ask'|'sources'>('ask'),[health,setHealth]=useState(false);
+ const[librarySearch,setLibrarySearch]=useState(''),[typeFilter,setTypeFilter]=useState('all'),[sortOrder,setSortOrder]=useState('newest');
+ const[selectedDoc,setSelectedDoc]=useState<Doc|null>(null),[evidenceData,setEvidenceData]=useState<EvidenceResponse|null>(null),[detailBusy,setDetailBusy]=useState(false);
  const inputRef=useRef<HTMLInputElement>(null);
  async function refresh(){try{const[d,h]=await Promise.all([fetch(`${API}/api/documents`),fetch(`${API}/api/health`)]);if(!d.ok||!h.ok)throw new Error('API unavailable');setDocs(await d.json());setHealth(true);}catch{setHealth(false);}}
  useEffect(()=>{refresh();},[]);
