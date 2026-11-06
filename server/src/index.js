@@ -177,10 +177,11 @@ function buildQueryResult(question, options = {}) {
     excerpt: chunk.content.slice(0, 420),
     relevance: Math.round(Math.min(1, chunk.score / (ranked[0]?.score || 1)) * 100),
   }));
-  const queryTerms = terms(question);
-  const coverage = queryTerms.length
-    ? Math.round(new Set(ranked.flatMap((result) => terms(result.content))).size /
-      new Set(queryTerms).size * 100)
+  const uniqueQueryTerms = new Set(terms(question));
+  const retrievedTerms = new Set(ranked.flatMap((result) => terms(result.content)));
+  const matchedQueryTerms = [...uniqueQueryTerms].filter((term) => retrievedTerms.has(term)).length;
+  const coverage = uniqueQueryTerms.size
+    ? Math.round(matchedQueryTerms / uniqueQueryTerms.size * 100)
     : 0;
   return {
     question,
