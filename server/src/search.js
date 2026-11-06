@@ -1,20 +1,111 @@
 import { randomUUID } from 'node:crypto';
-const STOP = new Set('the a an and or but if then is are was were be been being to of in on for from by with as at into about this that these those it its we you your our their they them he she his her what which when where who why how can could should would may might will do does did not no yes'.split(' '));
-export function terms(s) { return (s.toLowerCase().match(/[a-z0-9]+(?:[._-][a-z0-9]+)*/g) || []).filter(t => t.length > 1 && !STOP.has(t)); }
-export function score(query, content) {
-  const q=terms(query), d=terms(content); if(!q.length||!d.length)return 0;
-  const freq=new Map(); d.forEach(t=>freq.set(t,(freq.get(t)||0)+1));
-  let value=0; for(const t of new Set(q)){const count=freq.get(t)||0;if(count)value+=count*(1+Math.log(1+d.length/(1+count)));}
-  if(content.toLowerCase().includes(query.toLowerCase()))value+=8;
-  return value/Math.sqrt(d.length);
+
+const STOP = new Set(
+  'the a an and or but if then is are was were be been being to of in on for from by with as at into about this that these those it its we you your our their they them he she his her what which when where who why how can could should would may might will do does did not no yes'.split(' ')
+);
+
+const TOKEN_PATTERN = /[\p{L}\p{N}]+(?:[._-][\p{L}\p{N}]+)*/gu;
+
+export function terms(value) {
+  if (typeof value !== 'string' || !value) return [];
+  return (value.normalize('NFKC').toLocaleLowerCase().match(TOKEN_PATTERN) || [])
+    .filter((term) => !STOP.has(term));
 }
-export function splitChunks(text, source, max=900) {
-  const paras=text.replace(/\r/g,'').split(/\n{2,}|(?<=\.)\s+(?=[A-Z])/).map(x=>x.trim()).filter(Boolean);
-  const out=[];let current='',part=1;
-  function make(content,n){return{id:randomUUID(),documentId:source.documentId,documentName:source.name,location:source.locationPrefix?(source.locationPrefix.toLowerCase().includes('row')?source.locationPrefix+' '+n:source.locationPrefix):'Section '+n,content};}
-  for(const para of paras){if((current+' '+para).length>max&&current){out.push(make(current,part++));current='';}
-    if(para.length>max){for(let i=0;i<para.length;i+=max)out.push(make(para.slice(i,i+max),part++));}
-    else current+=(current?'\n':'')+para;
+
+export function score(query, content) {
+  const queryTerms = terms(query);
+  const documentTerms = terms(content);
+  if (!queryTerms.length || !documentTerms.length) return 0;
+
+  const frequencies = new Map();
+  for (const term of documentTerms) {
+    frequencies.set(term, (frequencies.get(term) || 0) + 1);
   }
-  if(current)out.push(make(current,part));return out;
+
+  const uniqueQueryTerms = [...new Set(queryTerms)];
+  let value = 0;
+  let matchedTerms = 0;
+
+  for (const term of uniqueQueryTerms) {
+    const frequency = frequencies.get(term) || 0;
+    if (!frequency) continue;
+    matchedTerms += 1;
+    // Diminishing returns prevent repeated words from dominating relevance.
+    value += (1 + Math.log(frequency)) *
+      (1 + Math.log(1 + documentTerms.length / (1 + frequency)));
+  }
+
+  if (!matchedTerms) return 0;
+
+  // Reward passages that cover more of the query, not just one repeated keyword.
+  const coverage = matchedTerms / uniqueQueryTerms.length;
+  value *= 1 + coverage * 0.5;
+
+  // Phrase matching is token-based, avoiding false positives such as "cat" in "education".
+  if (queryTerms.length > 1) {
+    const phraseFound = documentTerms.some((term, index) =>
+      term === queryTerms[0] &&
+      queryTerms.every((queryTerm, offset) => documentTerms[index + offset] === queryTerm)
+    );
+    if (phraseFound) value += 2.5;
+  }
+
+  return value / Math.sqrt(documentTerms.length);
+}
+
+export function splitChunks(text, source, max = 900) {
+  if (!Number.isInteger(max) || max < 1) {
+    throw new RangeError('Chunk size must be a positive integer.');
+  }
+
+  const paragraphs = text.replace(/\r/g, '')
+    .split(/\n{2,}|(?<=\.)\s+(?=[A-Z])/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  const chunks = [];
+  let current = '';
+  let part = 1;
+
+  function make(content, number) {
+    return {
+      id: randomUUID(),
+      documentId: source.documentId,
+      documentName: source.name,
+      location: source.locationPrefix
+        ? (source.locationPrefix.toLowerCase().includes('row')
+          ? source.locationPrefix + ' ' + number
+          : source.locationPrefix)
+        : 'Section ' + number,
+      content
+    };
+  }
+
+  function pushOversizedParagraph(paragraph) {
+    // Array.from splits by Unicode code point, never halfway through a surrogate pair.
+    const characters = Array.from(paragraph);
+    for (let index = 0; index < characters.length; index += max) {
+      chunks.push(make(characters.slice(index, index + max).join(''), part++));
+    }
+  }
+
+  for (const paragraph of paragraphs) {
+    if ((current + ' ' + paragraph).length > max && current) {
+      chunks.push(make(current, part++));
+      current = '';
+    }
+
+    if (Array.from(paragraph).length > max) {
+      if (current) {
+        chunks.push(make(current, part++));
+        current = '';
+      }
+      pushOversizedParagraph(paragraph);
+    } else {
+      current += (current ? '\n' : '') + paragraph;
+    }
+  }
+
+  if (current) chunks.push(make(current, part));
+  return chunks;
 }

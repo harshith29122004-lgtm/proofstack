@@ -44,7 +44,7 @@ The Express application is in `server/src/index.js`. It validates upload metadat
 
 ### Retrieval
 
-`server/src/search.js` contains the current lexical retrieval primitives: tokenization, chunk splitting and ranking. Retrieval is intentionally explainable and lightweight. It is not a semantic embedding model, a fact checker or a calibrated confidence estimator.
+`server/src/search.js` contains the current lexical retrieval primitives: Unicode-aware tokenization, chunk splitting and ranking. Ranking rewards term coverage and exact token phrases while reducing the influence of repeated terms. It is intentionally lightweight and explainable. It is not a semantic embedding model, a fact checker or a calibrated confidence estimator.
 
 ### Persistence
 
@@ -62,6 +62,6 @@ The local workspace is stored in `server/data/workspace.json`. Mutations are ser
 
 When adding a parser, preserve a stable document identity and include a useful source locator (page, sheet/row or section) wherever the source format permits it. Add synthetic fixtures and tests for malformed and boundary-case inputs.
 
-When changing retrieval, test tokenization, empty queries, repeated terms, punctuation, chunk boundaries and source-locator preservation. Explain ranking changes in the pull request.
+When changing retrieval, test tokenization, empty queries, repeated terms, punctuation, chunk boundaries, Unicode text and source-locator preservation. Explain ranking changes in the pull request.
 
 When changing persistence, cover concurrent mutations, failed writes, missing files and corrupt existing data. Do not silently reset a user's workspace after a parse or write error.
