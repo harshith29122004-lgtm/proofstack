@@ -32,7 +32,7 @@ const upload = multer({
     parts: 10,
   },
   fileFilter(_req, file, callback) {
-    const normalizedName = String(file.originalname || '').replaceAll('\\\\', '/');
+    const normalizedName = String(file.originalname || '').replaceAll('\\', '/');
     const safeName = path.posix.basename(normalizedName);
     const extension = path.extname(safeName).toLowerCase();
     if (!safeName || safeName === '.' || !ALLOWED_EXTENSIONS.has(extension)) {
@@ -79,7 +79,7 @@ async function extract(file) {
   }
   if (extension === '.pdf') {
     const parsed = await pdf(file.buffer);
-    return parsed.text.split('\\f')
+    return parsed.text.split('\f')
       .map((text, index) => ({ text, locationPrefix: 'Page ' + (index + 1) }))
       .filter((page) => page.text.trim());
   }
@@ -100,7 +100,7 @@ async function extract(file) {
     });
   }
   if (extension === '.csv') {
-    const rows = parseCsv(file.buffer.toString('utf8').replace(/^\\uFEFF/, ''), {
+    const rows = parseCsv(file.buffer.toString('utf8'), {
       relax_quotes: true,
       skip_empty_lines: true,
       bom: true,
@@ -271,4 +271,4 @@ app.use((error, _req, res, _next) => {
 
 app.listen(PORT, HOST, () => {
   console.log(`ProofStack API listening on http://${HOST}:${PORT}`);
-});
+});ÿ
