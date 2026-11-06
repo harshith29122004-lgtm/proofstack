@@ -69,9 +69,8 @@ For environment variables and host-binding details, see [server configuration](d
 ## Repository layout
 
 ```text
-client/       React, TypeScript and Vite application
+client/       React, TypeScript, Vite, nginx configuration and Dockerfile
 server/       Express API, parsers, workspace persistence, tests and Dockerfile
-client/       React app, nginx configuration and Dockerfile
 examples/     Synthetic sample documents for local evaluation
 docs/         Developer and API documentation
 .github/      CI, CodeQL, Dependabot and contribution templates
