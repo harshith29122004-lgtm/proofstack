@@ -7,6 +7,10 @@ The project is currently in an early prototype stage. There are no published rel
 ## Unreleased
 
 ### Added
+- Persistent saved evidence reports with backward-compatible workspace migration and a 100-report workspace limit.
+- Report list, detail, delete, and Markdown export API endpoints.
+- Saved reports workspace with save-from-search and download controls.
+- API integration tests for report lifecycle, Markdown export, validation, and snapshot retention after source deletion.
 - Searchable source-library screen with filename search, file-type filtering, and sorting.
 - Source inspector for reviewing extracted evidence passages with original location labels and paginated loading.
 - Paginated `GET /api/documents/:id/evidence` endpoint with bounded page size and excerpt length.
