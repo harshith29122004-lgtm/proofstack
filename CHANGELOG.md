@@ -6,6 +6,10 @@ The project is currently in an early prototype stage. There are no published rel
 
 ## Unreleased
 
+### Fixed
+- Corrected evidence coverage to count matched query terms instead of unrelated vocabulary in retrieved passages.
+- Documented the distinction between query-term coverage and relative retrieval relevance.
+
 ### Added
 - React component test suite covering source-scope controls, source-library navigation, saved-report rendering and persistent upload/backup controls.
 - Root `npm run test:client` command and client test execution in CI.
