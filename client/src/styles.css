@@ -72,3 +72,9 @@
 .source-open:hover{text-decoration:underline;color:#51448f}
 .evidence-inspector-item.focused{background:#f4f1ff;border-color:#bcb0ed;box-shadow:0 0 0 2px #ebe7ff}
 .evidence-inspector-item.focused b{color:#51448f}
+
+/* Workspace backup and restore controls */
+.workspace-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.workspace-actions .secondary-btn{text-decoration:none}
+.workspace-actions .primary-btn{white-space:nowrap}
+@media(max-width:760px){.workspace-actions{width:100%}.workspace-actions>*{flex:1;justify-content:center}.library-heading{gap:12px}}
