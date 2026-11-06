@@ -90,7 +90,7 @@ describe('ProofStack workspace navigation', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^View$/ }));
 
     expect(await screen.findByRole('heading', { name: 'Existing research' })).toBeInTheDocument();
-    expect(screen.getByText('What is the release deadline?')).toBeInTheDocument();
+    expect(screen.getByText('What is the release deadline?', { selector: 'p' })).toBeInTheDocument();
     expect(screen.getByText('The saved search found one matching passage.')).toBeInTheDocument();
     expect(screen.getByText('Release deadline is Friday.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Open original source/ })).toBeInTheDocument();
