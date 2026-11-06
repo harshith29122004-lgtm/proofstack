@@ -15,6 +15,7 @@ ProofStack ingests common office documents, indexes their text into evidence chu
 - Keep an on-disk local workspace with serialized writes and document removal.
 - Provide a React + TypeScript interface for querying evidence and managing a searchable source library.
 - Inspect indexed passages for each source, including page, sheet, row or section locators, with paginated loading.
+- Open a search citation directly in the source inspector, centered on and highlighting the exact retrieved passage.
 - Save evidence-query snapshots in the local workspace—including the selected source scope—and export cited passages, source locations, relevance signals and verification notes as Markdown.
 - Browse and delete saved reports; report snapshots remain available if the original source document is later removed.
 

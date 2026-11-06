@@ -7,6 +7,9 @@ The project is currently in an early prototype stage. There are no published rel
 ## Unreleased
 
 ### Added
+- Direct citation-to-source navigation using stable document and evidence-chunk IDs.
+- Evidence inspector deep-linking to a centered passage window and highlighting the cited chunk.
+- Regression tests for exact passage lookup and rejection of cross-document chunk IDs.
 - Optional per-document retrieval scope in the evidence assistant and query API.
 - Source scope is retained in saved report snapshots and report archive metadata.
 - Regression tests verify source-isolated results, missing-source handling and scoped report snapshots.

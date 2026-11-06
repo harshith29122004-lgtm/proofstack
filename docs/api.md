@@ -10,7 +10,7 @@ The API is intended for the local single-user application. It does not implement
 | --- | --- | --- |
 | GET | `/api/health` | API health and index counts |
 | GET | `/api/documents` | List indexed documents |
-| GET | `/api/documents/:id/evidence` | List paginated extracted passages for one document |
+| GET | `/api/documents/:id/evidence` | List paginated extracted passages for one document; optionally center the page on a citation using `chunkId` |
 | POST | `/api/documents` | Upload and index multipart files |
 | DELETE | `/api/documents/:id` | Remove a document and its evidence |
 | POST | `/api/reports` | Save a snapshot of an evidence query, including its optional source scope |
@@ -110,5 +110,7 @@ A supported extension does not guarantee a valid parse. Treat parser failures as
 ## Response and evidence semantics
 
 The API returns JSON. For exact response fields, consult the route implementation and the client types in the current branch; this reference documents the stable endpoint intent rather than freezing the prototype's evolving response schema.
+
+Query result source objects include `documentId` and `chunkId`. Pass a citation's `chunkId` to `GET /api/documents/:id/evidence?chunkId=CHUNK_ID` to retrieve a bounded page centered on that exact passage. The chunk must belong to the selected document; otherwise the API returns `404`.
 
 A query result is a ranked candidate passage with a source reference. It is not a generated answer, a verified claim, or a calibrated probability. Always inspect the cited source and surrounding context before relying on a result.
