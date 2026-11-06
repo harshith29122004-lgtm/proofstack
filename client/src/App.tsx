@@ -62,5 +62,5 @@ export default function App(){
  <div className="reports-list">{reports.map(report=><article className="report-card" key={report.id}><div className="report-icon"><FileText size={19}/></div><div className="report-copy"><b>{report.title}</b><span>{new Date(report.createdAt).toLocaleString()} · {report.sourceCount} source matches · {report.coverage}% term coverage · {report.scope}</span><small>{report.question}</small></div><a className="report-download" href={API+"/api/reports/"+report.id+"/export"} title="Download Markdown report"><Download size={16}/><span>Download</span></a><button className="remove-btn" title="Delete report" onClick={()=>deleteReport(report.id)}><Trash2 size={14}/></button></article>)}</div>
  {!reports.length&&<div className="library-empty"><BookOpen size={24}/><b>No saved reports yet</b><span>Run an evidence search and choose “Save report” to preserve its findings.</span><button className="primary-btn" onClick={()=>setTab('ask')}>Ask your evidence</button></div>}
  </section>}
- <footer><span>PROOFSTACK <i>·</i> LOCAL-FIRST EVIDENCE INTELLIGENCE</span><span><LockKeyhole size={12}/> Uploaded files are stored locally</span></footer></div></main></div>;
+ <footer><span>PROOFSTACK <i>·</i> LOCAL-FIRST EVIDENCE INTELLIGENCE</span><span><LockKeyhole size={12}/> Extracted text and metadata stay local</span></footer></div></main></div>;
 }
