@@ -278,6 +278,16 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
     assert.equal(invalidBackupResponse.status, 422);
     assert.equal((await fetch(`${baseUrl}/api/overview`).then((response) => response.json())).documents, 0);
 
+    const invalidStructure = {
+      ...backup,
+      chunks: [{ ...backup.chunks[0], documentId: 'missing-document' }],
+    };
+    const invalidStructureForm = new FormData();
+    invalidStructureForm.append('file', new Blob([JSON.stringify(invalidStructure)], { type: 'application/json' }), 'invalid-structure.json');
+    const invalidStructureResponse = await fetch(`${baseUrl}/api/workspace/import`, { method: 'POST', body: invalidStructureForm });
+    assert.equal(invalidStructureResponse.status, 422);
+    assert.equal((await fetch(`${baseUrl}/api/overview`).then((response) => response.json())).documents, 0);
+
     const restoreForm = new FormData();
     restoreForm.append('file', new Blob([JSON.stringify(backup)], { type: 'application/json' }), 'proofstack-workspace-backup.json');
     const restoreResponse = await fetch(`${baseUrl}/api/workspace/import`, { method: 'POST', body: restoreForm });

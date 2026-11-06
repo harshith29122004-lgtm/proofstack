@@ -440,16 +440,18 @@ function validateWorkspaceBackup(backup) {
   }
 
   const documentIds = new Set();
+  const documentsById = new Map();
   for (const document of backup.documents) {
     if (!document || typeof document.id !== 'string' || !document.id || documentIds.has(document.id)
       || typeof document.name !== 'string' || !document.name
       || typeof document.type !== 'string' || !ALLOWED_EXTENSIONS.has('.' + document.type.toLowerCase())
-      || !Number.isSafeInteger(document.size) || document.size < 0
+      || !Number.isSafeInteger(document.size) || document.size < 0 || document.size > 10 * 1024 * 1024
       || typeof document.createdAt !== 'string' || !Number.isFinite(Date.parse(document.createdAt))
       || !Number.isSafeInteger(document.chunkCount) || document.chunkCount < 0) {
       return 'Workspace backup contains an invalid document record.';
     }
     documentIds.add(document.id);
+    documentsById.set(document.id, document);
   }
 
   const chunkIds = new Set();
@@ -457,7 +459,7 @@ function validateWorkspaceBackup(backup) {
   for (const chunk of backup.chunks) {
     if (!chunk || typeof chunk.id !== 'string' || !chunk.id || chunkIds.has(chunk.id)
       || typeof chunk.documentId !== 'string' || !documentIds.has(chunk.documentId)
-      || typeof chunk.documentName !== 'string' || typeof chunk.location !== 'string'
+      || typeof chunk.documentName !== 'string' || chunk.documentName !== documentsById.get(chunk.documentId).name || typeof chunk.location !== 'string'
       || typeof chunk.content !== 'string' || chunk.content.length > 10_000) {
       return 'Workspace backup contains an invalid evidence record.';
     }
@@ -470,20 +472,26 @@ function validateWorkspaceBackup(backup) {
     }
   }
 
+  const reportIds = new Set();
   for (const report of backup.reports) {
-    if (!report || typeof report.id !== 'string' || !report.id
-      || typeof report.title !== 'string' || typeof report.question !== 'string'
+    if (!report || typeof report.id !== 'string' || !report.id || reportIds.has(report.id)
+      || typeof report.title !== 'string' || report.title.length > 100 || typeof report.question !== 'string'
       || report.question.length < 4 || report.question.length > 1000
       || typeof report.createdAt !== 'string' || !Number.isFinite(Date.parse(report.createdAt))
       || !Array.isArray(report.sources) || report.sources.length > 6
       || !Number.isFinite(report.coverage) || report.coverage < 0 || report.coverage > 100
-      || typeof report.answer !== 'string' || typeof report.notice !== 'string') {
+      || typeof report.answer !== 'string' || typeof report.notice !== 'string'
+      || (report.scope !== undefined && (!report.scope || typeof report.scope.documentName !== 'string'
+        || (report.scope.documentId !== null && report.scope.documentId !== undefined && typeof report.scope.documentId !== 'string')))) {
       return 'Workspace backup contains an invalid saved report.';
     }
+    reportIds.add(report.id);
     for (const source of report.sources) {
       if (!source || typeof source.document !== 'string' || typeof source.location !== 'string'
         || typeof source.excerpt !== 'string' || !Number.isFinite(source.relevance)
-        || source.relevance < 0 || source.relevance > 100) {
+        || source.relevance < 0 || source.relevance > 100
+        || (source.documentId !== undefined && typeof source.documentId !== 'string')
+        || (source.chunkId !== undefined && typeof source.chunkId !== 'string')) {
         return 'Workspace backup contains an invalid report citation.';
       }
     }
