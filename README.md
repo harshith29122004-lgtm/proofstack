@@ -52,7 +52,8 @@ Open the Vite URL printed by the client (normally http://localhost:5173). The AP
 Useful root commands:
 
 ```bash
-npm test       # server tests
+npm test       # server API and parser tests
+npm run test:client # React component tests
 npm run build  # client type-check and production build
 npm start      # start the API only
 ```

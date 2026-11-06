@@ -66,6 +66,22 @@ The server creates its local workspace under `server/data/workspace.json`. This 
 
 If startup reports that an existing workspace cannot be read or parsed, stop and preserve the file for recovery. Do not delete it as a first troubleshooting step.
 
+## Tests
+
+Run the backend integration and parser tests:
+
+```bash
+npm test
+```
+
+Run the React component tests:
+
+```bash
+npm run test:client
+```
+
+The client suite uses Vitest, jsdom and React Testing Library. CI runs both test suites before the client production build and Docker smoke test.
+
 ## Troubleshooting
 
 ### Port already in use
