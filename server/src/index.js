@@ -333,8 +333,8 @@ app.post('/api/query', (req, res) => {
 });
 
 app.get('/api/reports', (_req, res) => res.json(
-  db.reports.map(({ id, title, question, createdAt, sources, coverage }) => ({
-    id, title, question, createdAt, sourceCount: sources.length, coverage, scope: report.scope?.documentName || 'All sources',
+  db.reports.map(({ id, title, question, createdAt, sources, coverage, scope }) => ({
+    id, title, question, createdAt, sourceCount: sources.length, coverage, scope: scope?.documentName || 'All sources',
   })),
 ));
 
