@@ -7,6 +7,9 @@ The project is currently in an early prototype stage. There are no published rel
 ## Unreleased
 
 ### Added
+- Optional per-document retrieval scope in the evidence assistant and query API.
+- Source scope is retained in saved report snapshots and report archive metadata.
+- Regression tests verify source-isolated results, missing-source handling and scoped report snapshots.
 - Persistent saved evidence reports with backward-compatible workspace migration and a 100-report workspace limit.
 - Report list, detail, delete, and Markdown export API endpoints.
 - Saved reports workspace with save-from-search and download controls.

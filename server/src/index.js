@@ -152,8 +152,14 @@ async function extract(file) {
   throw new Error('Unsupported file type.');
 }
 
-function buildQueryResult(question) {
-  const ranked = db.chunks
+function buildQueryResult(question, options = {}) {
+  const scopedDocument = options.documentId
+    ? db.documents.find((document) => document.id === options.documentId)
+    : null;
+  const candidateChunks = options.documentId
+    ? db.chunks.filter((chunk) => chunk.documentId === options.documentId)
+    : db.chunks;
+  const ranked = candidateChunks
     .map((chunk) => ({ ...chunk, score: score(question, chunk.content) }))
     .filter((chunk) => chunk.score > 0)
     .sort((left, right) => right.score - left.score)
@@ -172,6 +178,7 @@ function buildQueryResult(question) {
     : 0;
   return {
     question,
+    scope: { documentId: scopedDocument?.id || null, documentName: scopedDocument?.name || 'All sources' },
     answer: ranked.length
       ? 'Here are the strongest matching passages from your workspace. This release uses transparent, extractive retrieval rather than generating unsupported claims. Read the cited excerpts before relying on a conclusion.'
       : 'No matching evidence was found in the current workspace. Add relevant documents or try different wording.',
@@ -318,12 +325,16 @@ app.post('/api/query', (req, res) => {
   if (question.length < 4 || question.length > 1000) {
     return res.status(400).json({ error: 'Ask a more specific question (at least 4 characters and no more than 1,000).' });
   }
-  return res.json(buildQueryResult(question));
+  const documentId = req.body?.documentId ? String(req.body.documentId).trim() : null;
+  if (documentId && !db.documents.some((document) => document.id === documentId)) {
+    return res.status(404).json({ error: 'The selected source was not found. Refresh the source library and try again.' });
+  }
+  return res.json(buildQueryResult(question, { documentId }));
 });
 
 app.get('/api/reports', (_req, res) => res.json(
-  db.reports.map(({ id, title, question, createdAt, sources, coverage }) => ({
-    id, title, question, createdAt, sourceCount: sources.length, coverage,
+  db.reports.map(({ id, title, question, createdAt, sources, coverage, scope }) => ({
+    id, title, question, createdAt, sourceCount: sources.length, coverage, scope: scope?.documentName || 'All sources',
   })),
 ));
 
@@ -335,7 +346,11 @@ app.post('/api/reports', async (req, res) => {
   if (db.reports.length >= 100) {
     return res.status(409).json({ error: 'This workspace has reached its limit of 100 saved reports. Delete an older report to continue.' });
   }
-  const result = buildQueryResult(question);
+  const documentId = req.body?.documentId ? String(req.body.documentId).trim() : null;
+  if (documentId && !db.documents.some((document) => document.id === documentId)) {
+    return res.status(404).json({ error: 'The selected source was not found. Refresh the source library and try again.' });
+  }
+  const result = buildQueryResult(question, { documentId });
   const report = {
     id: randomUUID(),
     title: question.length > 100 ? question.slice(0, 97) + '...' : question,
@@ -347,7 +362,7 @@ app.post('/api/reports', async (req, res) => {
     return res.status(201).json({
       id: report.id, title: report.title, question: report.question,
       createdAt: report.createdAt, sourceCount: report.sources.length,
-      coverage: report.coverage,
+      coverage: report.coverage, scope: report.scope.documentName,
     });
   } catch {
     return res.status(500).json({ error: 'Could not save the evidence report.' });

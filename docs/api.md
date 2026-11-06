@@ -13,12 +13,12 @@ The API is intended for the local single-user application. It does not implement
 | GET | `/api/documents/:id/evidence` | List paginated extracted passages for one document |
 | POST | `/api/documents` | Upload and index multipart files |
 | DELETE | `/api/documents/:id` | Remove a document and its evidence |
-| POST | `/api/reports` | Save a snapshot of an evidence query |
+| POST | `/api/reports` | Save a snapshot of an evidence query, including its optional source scope |
 | GET | `/api/reports` | List saved report metadata |
 | GET | `/api/reports/:id` | Retrieve a saved report snapshot |
 | GET | `/api/reports/:id/export` | Download a Markdown report |
 | DELETE | `/api/reports/:id` | Delete a saved report |
-| POST | `/api/query` | Retrieve evidence for a question |
+| POST | `/api/query` | Retrieve evidence for a question, optionally scoped to one source |
 | GET | `/api/overview` | Workspace counts and storage overview |
 
 ## Examples
@@ -56,6 +56,16 @@ curl -X POST http://127.0.0.1:8787/api/query \
   -d '{"question":"Which cost items increased?"}'
 ```
 
+Search within one document by including its ID in the query body:
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/query \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Which cost items increased?","documentId":"DOCUMENT_ID"}'
+```
+
+Omit `documentId` to search the full workspace. A stale or unknown document ID returns `404`.
+
 Save a snapshot of an evidence query:
 
 ```bash
@@ -63,6 +73,8 @@ curl -X POST http://127.0.0.1:8787/api/reports \
   -H "Content-Type: application/json" \
   -d '{"question":"Which cost items increased?"}'
 ```
+
+Saved reports retain the selected source scope along with the evidence snapshot.
 
 List saved reports and download one as Markdown:
 
