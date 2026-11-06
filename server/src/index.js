@@ -1,7 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
-import pdf from 'pdf-parse/lib/pdf-parse.js';
+import { CanvasFactory } from 'pdf-parse/worker';
+import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
 import XLSX from 'xlsx';
 import { parse as parseCsv } from 'csv-parse/sync';
@@ -112,7 +113,13 @@ async function extract(file) {
     return [{ text: file.buffer.toString('utf8'), locationPrefix: 'Section' }];
   }
   if (extension === '.pdf') {
-    const parsed = await pdf(file.buffer);
+    const parser = new PDFParse({ data: file.buffer, CanvasFactory });
+    let parsed;
+    try {
+      parsed = await parser.getText();
+    } finally {
+      await parser.destroy();
+    }
     return parsed.text.split('\f')
       .map((text, index) => ({ text, locationPrefix: 'Page ' + (index + 1) }))
       .filter((page) => page.text.trim());
