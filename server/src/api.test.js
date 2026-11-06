@@ -153,6 +153,25 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
 
     assert.equal(query.sources[0].documentId, uploadedA.documents[0].id);
     assert.ok(query.sources[0].chunkId);
+    assert.equal(query.coverage, 100);
+
+    const partialCoverageResponse = await fetch(`${baseUrl}/api/query`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'launch deadline Friday absentword' }),
+    });
+    assert.equal(partialCoverageResponse.status, 200);
+    const partialCoverage = await partialCoverageResponse.json();
+    assert.equal(partialCoverage.coverage, 75, 'coverage counts only distinct query terms present in retrieved passages');
+
+    const noCoverageResponse = await fetch(`${baseUrl}/api/query`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'unrelatedterm missingphrase' }),
+    });
+    assert.equal(noCoverageResponse.status, 200);
+    assert.equal((await noCoverageResponse.json()).coverage, 0);
+
     const focusedEvidenceResponse = await fetch(`${baseUrl}/api/documents/${uploadedA.documents[0].id}/evidence?limit=5&chunkId=${query.sources[0].chunkId}`);
     assert.equal(focusedEvidenceResponse.status, 200);
     const focusedEvidence = await focusedEvidenceResponse.json();

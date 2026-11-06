@@ -132,4 +132,4 @@ The API returns JSON. For exact response fields, consult the route implementatio
 
 Query result source objects include `documentId` and `chunkId`. Pass a citation's `chunkId` to `GET /api/documents/:id/evidence?chunkId=CHUNK_ID` to retrieve a bounded page centered on that exact passage. The chunk must belong to the selected document; otherwise the API returns `404`.
 
-A query result is a ranked candidate passage with a source reference. It is not a generated answer, a verified claim, or a calibrated probability. Always inspect the cited source and surrounding context before relying on a result.
+A query result is a ranked candidate passage with a source reference. `coverage` is the percentage of distinct non-stopword query terms found anywhere in the top six retrieved passages; it is not a relevance confidence score. Each source `relevance` value is normalized against the highest-ranked match in that query, not calibrated as a probability. Neither metric verifies a claim. Always inspect the cited source and surrounding context before relying on a result.
