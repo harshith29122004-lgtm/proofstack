@@ -233,8 +233,15 @@ test('API validates uploads, indexes evidence, and exposes workspace endpoints',
     const reportAfterDocumentDelete = await fetch(`${baseUrl}/api/reports/${savedReport.id}`);
     assert.equal(reportAfterDocumentDelete.status, 200, 'saved report retains its evidence snapshot after source deletion');
 
-    const reportDelete = await fetch(`${baseUrl}/api/reports/${savedReport.id}`, { method: 'DELETE' });
-    assert.equal(reportDelete.status, 200);
+    const scopedReportAfterDocumentDelete = await fetch(`${baseUrl}/api/reports/${scopedReport.id}`).then((response) => response.json());
+    assert.equal(scopedReportAfterDocumentDelete.scope.documentName, 'support-brief.txt');
+    assert.equal(scopedReportAfterDocumentDelete.sources.length, 1);
+
+    const [reportDelete, scopedReportDelete] = await Promise.all([
+      fetch(`${baseUrl}/api/reports/${savedReport.id}`, { method: 'DELETE' }),
+      fetch(`${baseUrl}/api/reports/${scopedReport.id}`, { method: 'DELETE' }),
+    ]);
+    assert.deepEqual([reportDelete.status, scopedReportDelete.status], [200, 200]);
     assert.equal((await fetch(`${baseUrl}/api/reports`).then((response) => response.json())).length, 0);
     assert.equal((await fetch(`${baseUrl}/api/reports/${savedReport.id}`)).status, 404);
 
