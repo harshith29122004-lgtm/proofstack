@@ -177,10 +177,11 @@ function buildQueryResult(question, options = {}) {
     excerpt: chunk.content.slice(0, 420),
     relevance: Math.round(Math.min(1, chunk.score / (ranked[0]?.score || 1)) * 100),
   }));
-  const queryTerms = terms(question);
-  const coverage = queryTerms.length
-    ? Math.round(new Set(ranked.flatMap((result) => terms(result.content))).size /
-      new Set(queryTerms).size * 100)
+  const uniqueQueryTerms = new Set(terms(question));
+  const retrievedTerms = new Set(ranked.flatMap((result) => terms(result.content)));
+  const matchedQueryTerms = [...uniqueQueryTerms].filter((term) => retrievedTerms.has(term)).length;
+  const coverage = uniqueQueryTerms.size
+    ? Math.round(matchedQueryTerms / uniqueQueryTerms.size * 100)
     : 0;
   return {
     question,
@@ -470,22 +471,35 @@ function validateWorkspaceBackup(backup) {
     }
   }
 
+  const reportIds = new Set();
   for (const report of backup.reports) {
-    if (!report || typeof report.id !== 'string' || !report.id
-      || typeof report.title !== 'string' || typeof report.question !== 'string'
-      || report.question.length < 4 || report.question.length > 1000
+    if (!report || typeof report.id !== 'string' || !report.id || reportIds.has(report.id)
+      || typeof report.title !== 'string' || report.title.length < 1 || report.title.length > 200
+      || typeof report.question !== 'string' || report.question.length < 4 || report.question.length > 1000
       || typeof report.createdAt !== 'string' || !Number.isFinite(Date.parse(report.createdAt))
+      || !report.scope || !(report.scope.documentId === null || typeof report.scope.documentId === 'string')
+      || typeof report.scope.documentName !== 'string'
       || !Array.isArray(report.sources) || report.sources.length > 6
       || !Number.isFinite(report.coverage) || report.coverage < 0 || report.coverage > 100
-      || typeof report.answer !== 'string' || typeof report.notice !== 'string') {
+      || typeof report.answer !== 'string' || report.answer.length > 2000
+      || report.mode !== 'extractive'
+      || typeof report.notice !== 'string' || report.notice.length > 2000) {
       return 'Workspace backup contains an invalid saved report.';
     }
+    reportIds.add(report.id);
+    const citations = new Set();
     for (const source of report.sources) {
-      if (!source || typeof source.document !== 'string' || typeof source.location !== 'string'
-        || typeof source.excerpt !== 'string' || !Number.isFinite(source.relevance)
-        || source.relevance < 0 || source.relevance > 100) {
+      if (!source || typeof source.citation !== 'string' || !/^\[S[1-6]\]$/.test(source.citation)
+        || citations.has(source.citation)
+        || typeof source.chunkId !== 'string' || !source.chunkId
+        || typeof source.documentId !== 'string' || !source.documentId
+        || typeof source.document !== 'string' || !source.document
+        || typeof source.location !== 'string' || source.location.length > 500
+        || typeof source.excerpt !== 'string' || source.excerpt.length > 420
+        || !Number.isFinite(source.relevance) || source.relevance < 0 || source.relevance > 100) {
         return 'Workspace backup contains an invalid report citation.';
       }
+      citations.add(source.citation);
     }
   }
   return null;

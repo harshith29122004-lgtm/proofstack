@@ -37,6 +37,8 @@ jobs:
           node-version: 22
       - name: Install client dependencies
         run: npm install --prefix client --no-audit --no-fund
+      - name: Run client component tests
+        run: npm test --prefix client
       - name: Build client
         run: npm run build --prefix client
   container-smoke:

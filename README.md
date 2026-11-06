@@ -20,6 +20,8 @@ ProofStack ingests common office documents, indexes their text into evidence chu
 - Browse and delete saved reports; report snapshots remain available if the original source document is later removed.
 - Export the complete local workspace—including sources, extracted evidence and saved reports—to a versioned JSON backup, then restore it with validation.
 
+Original uploaded file bytes are processed in memory and are not retained; ProofStack persists document metadata, extracted text, evidence chunks and saved reports in the local workspace.
+
 ProofStack does **not** currently provide semantic/vector search, generated answers, claim-entailment verification, contradiction detection, OCR, authentication, multi-user access, or encrypted-at-rest storage. Saved reports are snapshots of extractive retrieval—not independently verified findings. A relevance score is a ranking signal, not a truth or confidence score.
 
 ## Quick start
@@ -50,7 +52,8 @@ Open the Vite URL printed by the client (normally http://localhost:5173). The AP
 Useful root commands:
 
 ```bash
-npm test       # server tests
+npm test       # server API and parser tests
+npm run test:client # React component tests
 npm run build  # client type-check and production build
 npm start      # start the API only
 ```

@@ -6,7 +6,13 @@ The project is currently in an early prototype stage. There are no published rel
 
 ## Unreleased
 
+### Fixed
+- Preserve exact CSV and spreadsheet row locators when a long cell is split into multiple evidence chunks.
+- Corrected evidence coverage to count matched query terms instead of unrelated vocabulary in retrieved passages.
+- Documented the distinction between query-term coverage and relative retrieval relevance.
+
 ### Added
+- Direct unit tests for Unicode tokenization, retrieval ranking, phrase matching and chunk provenance boundaries.
 - Local Docker Compose deployment with an unprivileged API container, nginx frontend proxy and persistent named workspace volume.
 - CI container build and end-to-end smoke test through the published local web endpoint.
 - Versioned workspace JSON export and validated, atomic restore endpoints.
