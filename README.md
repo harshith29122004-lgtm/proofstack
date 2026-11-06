@@ -1,22 +1,25 @@
 # ProofStack
 
-Evidence-first, local-first document workspace for traceable decisions.
+Evidence-first, local-first document workspace for traceable research and decisions.
 
-ProofStack ingests common office documents, indexes text into evidence units, and retrieves relevant passages with source references. It intentionally does not pretend a text match proves a claim or fabricate an AI answer.
+ProofStack ingests common office documents, indexes their text into evidence chunks, and retrieves relevant passages with source references. It is designed to help people inspect *why* a result was returned—not to pretend that text similarity proves a claim.
 
-## Features in v0.1
-- Multi-file upload (10 MB/file; up to 5 files per request)
-- PDF, DOCX, XLSX, XLS, CSV, TXT, Markdown, JSON and LOG extraction
-- Chunked evidence indexing with source document and page/sheet/row/section locators
-- Ranked lexical retrieval with source excerpts and relevance ranking
-- Local JSON persistence with serialized writes, document removal, API health and overview endpoints
-- Responsive React/TypeScript interface
+> **Status:** early prototype (v0.1). Use synthetic or non-sensitive documents while evaluating it. See [SECURITY.md](SECURITY.md) before exposing any service or handling confidential material.
 
-## Architecture
-React + TypeScript + Vite (5173) -> Express API (8787) -> document parsers -> chunking and lexical retrieval -> local JSON store at server/data/workspace.json.
+## What it does
 
-## Run locally
-Requirements: Node.js 20+ and npm.
+- Upload up to 5 files per request, 10 MB per file.
+- Extract text from PDF, DOCX, XLSX, XLS, CSV, TXT, Markdown, JSON and LOG files.
+- Split extracted text into evidence chunks while retaining document and page/sheet/row/section locators where available.
+- Retrieve ranked lexical matches with source excerpts and relevance signals.
+- Keep an on-disk local workspace with serialized writes and document removal.
+- Provide a React + TypeScript interface for browsing the workspace and querying evidence.
+
+ProofStack does **not** currently provide semantic/vector search, generated answers, claim-entailment verification, contradiction detection, OCR, authentication, multi-user access, or encrypted-at-rest storage. A relevance score is a ranking signal, not a truth or confidence score.
+
+## Quick start
+
+Requirements: Node.js 20 or newer and npm.
 
 ```bash
 npm install
@@ -24,41 +27,50 @@ npm install --prefix server
 npm install --prefix client
 npm run dev
 ```
-Open http://localhost:5173. API: http://127.0.0.1:8787 (bound to loopback by default).
+
+Open the Vite URL printed by the client (normally http://localhost:5173). The API listens on http://127.0.0.1:8787 by default.
+
+Useful root commands:
 
 ```bash
-npm test
-npm run build
+npm test       # server tests
+npm run build  # client type-check and production build
+npm start      # start the API only
 ```
 
-## API
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | /api/health | API health and index counts |
-| GET | /api/documents | List indexed documents |
-| POST | /api/documents | Upload files as multipart field files |
-| DELETE | /api/documents/:id | Remove document and evidence |
-| POST | /api/query | Retrieve evidence for { "question": "..." } |
-| GET | /api/overview | Workspace counts and storage mode |
+For environment variables and host-binding details, see [server configuration](docs/development.md#configuration).
 
-## Honest limitations
-This is an early prototype. It does not yet include semantic/vector search, generated answers, claim entailment verification, robust contradiction detection, OCR, authentication, encryption-at-rest, multi-user access, audit export, production database migrations, or hardened upload sandboxing. Relevance is a ranking signal, not a confidence score. Keep it local and do not expose the API to the public internet or upload confidential documents to a shared machine.
+## Documentation
 
-## Principles
-1. Evidence before eloquence.
-2. Visible limitations and uncertainty.
-3. Local-first privacy.
-4. Replaceable parser, retrieval, persistence and UI components.
-5. No fake verification.
+- [Developer setup and troubleshooting](docs/development.md)
+- [Architecture and data flow](docs/architecture.md)
+- [API reference and curl examples](docs/api.md)
+- [Contribution guide](CONTRIBUTING.md)
+- [Security policy and deployment limitations](SECURITY.md)
+- [Changelog](CHANGELOG.md)
 
-## Roadmap
-- [ ] Parser/API integration and browser end-to-end tests
-- [ ] Deterministic source locators and source hashes
-- [ ] OCR for scanned documents
-- [ ] Hybrid BM25 + embedding retrieval
-- [ ] Contradiction candidates with side-by-side citations
-- [ ] Decision briefs and exportable evidence ledger
-- [ ] Optional local model adapter with explicit user opt-in
-- [ ] SQLite/PostgreSQL, migrations, authentication and deployment hardening
+## Repository layout
 
-Synthetic sample documents are in examples/. MIT licensed.
+```text
+client/       React, TypeScript and Vite application
+server/       Express API, parsers, workspace persistence and tests
+examples/     Synthetic sample documents for local evaluation
+docs/         Developer and API documentation
+.github/      CI, CodeQL, Dependabot and contribution templates
+```
+
+## Evidence and privacy principles
+
+1. Show source passages before presenting conclusions.
+2. Keep document processing local by default.
+3. Preserve source locators so users can inspect the original material.
+4. Make uncertainty and product limitations visible.
+5. Never label lexical matching as verified fact.
+
+## Contributing
+
+Bug reports, focused improvements, documentation and tests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), then look for issues tagged `good first issue` or `help wanted`. If you are proposing a larger change, open an issue first so scope and expected behavior can be agreed before implementation.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
