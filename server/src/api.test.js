@@ -34,14 +34,14 @@ async function waitForApi(url, child) {
   throw new Error('ProofStack API did not become ready within five seconds.');
 }
 
-test('API exposes health, empty workspace, and query validation endpoints', async (t) => {
+test('API validates uploads, indexes evidence, and exposes workspace endpoints', async (t) => {
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const isolatedDirectory = await mkdtemp(path.join(tmpdir(), 'proofstack-api-'));
   const entrypoint = fileURLToPath(new URL('./index.js', import.meta.url));
   const child = spawn(process.execPath, [entrypoint], {
     cwd: isolatedDirectory,
-    env: { ...process.env, PORT: String(port) },
+    env: { ...process.env, PORT: String(port), HOST: '127.0.0.1' },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
 
@@ -50,14 +50,15 @@ test('API exposes health, empty workspace, and query validation endpoints', asyn
   child.stderr.on('data', (chunk) => { stderr += chunk; });
 
   t.after(async () => {
-    child.kill('SIGTERM');
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
     await new Promise((resolve) => {
       if (child.exitCode !== null || child.signalCode !== null) return resolve();
       child.once('exit', resolve);
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
         child.kill('SIGKILL');
         resolve();
-      }, 1500).unref();
+      }, 1500);
+      timeout.unref();
     });
     await rm(isolatedDirectory, { recursive: true, force: true });
   });
@@ -85,6 +86,67 @@ test('API exposes health, empty workspace, and query validation endpoints', asyn
     });
     assert.equal(invalidQueryResponse.status, 400);
     assert.match((await invalidQueryResponse.json()).error, /at least 4 characters/i);
+
+    const unsupported = new FormData();
+    unsupported.append('files', new Blob(['not a supported document']), 'payload.exe');
+    const unsupportedResponse = await fetch(`${baseUrl}/api/documents`, {
+      method: 'POST',
+      body: unsupported,
+    });
+    assert.equal(unsupportedResponse.status, 415);
+    assert.match((await unsupportedResponse.json()).error, /unsupported file type/i);
+
+    const empty = new FormData();
+    empty.append('files', new Blob([]), 'empty.txt');
+    const emptyResponse = await fetch(`${baseUrl}/api/documents`, {
+      method: 'POST',
+      body: empty,
+    });
+    assert.equal(emptyResponse.status, 400);
+    assert.match((await emptyResponse.json()).error, /empty files/i);
+
+    const tooMany = new FormData();
+    for (let index = 0; index < 6; index += 1) {
+      tooMany.append('files', new Blob([`sample document ${index}`]), `sample-${index}.txt`);
+    }
+    const tooManyResponse = await fetch(`${baseUrl}/api/documents`, {
+      method: 'POST',
+      body: tooMany,
+    });
+    assert.equal(tooManyResponse.status, 413);
+
+    const valid = new FormData();
+    valid.append('files', new Blob(['The launch deadline is Friday and the project owner is Alex.']), 'project-brief.txt');
+    const uploadResponse = await fetch(`${baseUrl}/api/documents`, {
+      method: 'POST',
+      body: valid,
+    });
+    assert.equal(uploadResponse.status, 201);
+    const uploaded = await uploadResponse.json();
+    assert.equal(uploaded.documents.length, 1);
+    assert.ok(uploaded.totalChunks > 0);
+
+    const queryResponse = await fetch(`${baseUrl}/api/query`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'launch deadline Friday' }),
+    });
+    assert.equal(queryResponse.status, 200);
+    const query = await queryResponse.json();
+    assert.equal(query.sources.length, 1);
+    assert.match(query.sources[0].excerpt, /deadline is Friday/i);
+
+    const afterUpload = await fetch(`${baseUrl}/api/overview`).then((response) => response.json());
+    assert.equal(afterUpload.documents, 1);
+    assert.ok(afterUpload.evidenceUnits > 0);
+
+    const deleteResponse = await fetch(`${baseUrl}/api/documents/${uploaded.documents[0].id}`, {
+      method: 'DELETE',
+    });
+    assert.equal(deleteResponse.status, 200);
+    const afterDelete = await fetch(`${baseUrl}/api/overview`).then((response) => response.json());
+    assert.equal(afterDelete.documents, 0);
+    assert.equal(afterDelete.evidenceUnits, 0);
   } catch (error) {
     if (stderr) error.message += `\nAPI stderr: ${stderr}`;
     throw error;
